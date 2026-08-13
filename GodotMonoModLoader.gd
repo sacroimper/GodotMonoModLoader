@@ -123,7 +123,15 @@ func load_module(mod: ModInfo, module: DllModuleInfo) -> bool:
 
 	if mod_loader == null:
 		var ModLoader = load("res://GodotMonoModLoader/GodotMonoModLoader.cs")
+		if ModLoader == null:
+			module.state = State.ERROR
+			log_message(str("Could not load module ", module.moduleId, ". The game has to be patched to be able to load custom dlls"))
+			return false
 		mod_loader = ModLoader.new()
+		if mod_loader == null:
+			module.state = State.ERROR
+			log_message(str("Could not load module ", module.moduleId, ". The game has to be patched to be able to load custom dlls"))
+			return false
 
 	log_message(str("Loading Mod: ", mod.id, ", Module: ", module.moduleId, ", Dll: ", module.dll))
 	log_message(str("Path: ", mod.path))
