@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.IO.Compression;
 using System.Reflection;
+using System.Reflection.Metadata;
 using System.Runtime.Loader;
 using Godot;
 using Godot.Bridge;
@@ -11,8 +12,8 @@ using MethodInfo = System.Reflection.MethodInfo;
 
 namespace Atomcraft;
 
-[ScriptPath("res://GodotMonoModLoader/GodotMonoModLoader.cs")]
-public partial class GodotMonoModLoader : Node
+[ScriptPath("res://GodotMonoModLoaderPatch/GodotMonoModLoaderPatch.cs")]
+public partial class GodotMonoModLoaderPatch : Node
 {
 
 	public new class MethodName : Node.MethodName
@@ -28,11 +29,6 @@ public partial class GodotMonoModLoader : Node
 
 	public new class SignalName : Node.SignalName
 	{
-	}
-	
-	public override void _Ready()
-	{
-		GD.Print("=== INJECTED NODE LOADED ===");
 	}
 	
 	public int LoadDllFromZip(string zipPath, string dllPath, string? initClass)
@@ -56,12 +52,14 @@ public partial class GodotMonoModLoader : Node
 			memory.Position = 0;
 			
 			assembly = AssemblyLoadContext.GetLoadContext(Assembly.GetExecutingAssembly())?.LoadFromStream(memory);
-
+			
 			if (assembly == null)
 			{
 				throw new Exception("Could not load DLL: " + dllPath);
 			}
-
+			
+			ScriptManagerBridge.LookupScriptsInAssembly(assembly);
+			
 			GD.Print($"[DllLoader] DLL Loaded: {assembly.FullName}");
 
 		}
@@ -102,6 +100,8 @@ public partial class GodotMonoModLoader : Node
 			{
 				throw new Exception("[DllLoader] Could not load DLL: " + dllPath);
 			}
+			
+			ScriptManagerBridge.LookupScriptsInAssembly(assembly);
 
 			GD.Print($"[DllLoader] DLL Loaded: {assembly.FullName}");
 

@@ -1,0 +1,154 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <BaseDirectory>GodotMonoModLoader</BaseDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="Atomcraft">
+            <HintPath>$(GameInstallDir)\data_Atomcraft_windows_x86_64\Atomcraft.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="GodotSharp">
+            <HintPath>$(GameInstallDir)\data_Atomcraft_windows_x86_64\GodotSharp.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <Reference Include="Newtonsoft.Json">
+            <HintPath>$(GameInstallDir)\data_Atomcraft_windows_x86_64\Newtonsoft.Json.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+        <PackageReference Include="Godot.SourceGenerators" Version="4.4.0" >
+            <OutputItemType>Analyzer</OutputItemType>
+            <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+        </PackageReference>
+        <PackageReference Include="Lib.Harmony" Version="2.4.2"  />
+    </ItemGroup>
+
+<!--    <PropertyGroup>-->
+<!--        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>-->
+<!--        <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>-->
+<!--    </PropertyGroup>-->
+    
+    <PropertyGroup>
+        <GodotProjectDir>$(MSBuildProjectDirectory)</GodotProjectDir>
+        <GodotTargetPlatform>Windows</GodotTargetPlatform>
+        <GodotPlatform>Windows</GodotPlatform>
+        <GodotTargetArchitecture>x86_64</GodotTargetArchitecture>
+        <GodotApiConfiguration>Release</GodotApiConfiguration>
+        <GodotRealTIsDouble>false</GodotRealTIsDouble>
+        <EnableGodotGenerators>true</EnableGodotGenerators>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <CompilerVisibleProperty Include="GodotProjectDir" />
+        <CompilerVisibleProperty Include="GodotTargetPlatform" />
+        <CompilerVisibleProperty Include="GodotPlatform" />
+        <CompilerVisibleProperty Include="GodotTargetArchitecture" />
+        <CompilerVisibleProperty Include="GodotApiConfiguration" />
+        <CompilerVisibleProperty Include="GodotRealTIsDouble" />
+        <CompilerVisibleProperty Include="EnableGodotGenerators" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="GodotMonoModLoader\Logger\**" />
+      <Compile Remove="GodotMonoModLoader\UI\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="GodotMonoModLoader\Logger\**" />
+      <EmbeddedResource Remove="GodotMonoModLoader\UI\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="GodotMonoModLoader\Logger\**" />
+      <None Remove="GodotMonoModLoader\UI\**" />
+    </ItemGroup>
+
+
+    
+
+    <Target Name="CreateZip" BeforeTargets="AfterBuild">
+
+        <PropertyGroup>
+            <Name>GodotMonoModLoader</Name>
+            <ReleaseDir>$(MSBuildProjectDirectory)/../Release</ReleaseDir>
+            <Dir>$(ReleaseDir)/$(Name)</Dir>
+            <SubDir>$(Dir)/$(Name)</SubDir>
+            <Zip>$(Dir).zip</Zip>
+            
+            <GDScriptsDir>$(ReleaseDir)/../GDScripts</GDScriptsDir>
+            <DataDir>$(ProjectDir)Data</DataDir>
+        </PropertyGroup>
+        <ItemGroup>
+            <GDScripts Include="$(GDScriptsDir)\**\*" />
+            <Data Include="$(DataDir)\**\*" />
+        </ItemGroup>
+        
+        
+        <RemoveDir Directories="$(Dir)" />
+
+        <MakeDir Directories="$(SubDir)" />
+        
+        <MSBuild Projects="..\ModLoaderPatch\ModLoaderPatch.csproj" BuildInParallel="$(BuildInParallel)" Targets="Clean;Build">
+            <Output TaskParameter="TargetOutputs" ItemName="ModLoaderPatchOutput" />
+        </MSBuild>
+        
+        <MSBuild Projects="..\AtomcraftPatcher\AtomcraftPatcher.csproj" BuildInParallel="$(BuildInParallel)" Targets="Clean;Publish"
+                 Properties="Configuration=$(Configuration);
+                  RuntimeIdentifier=win-x64;
+                  PublishDir=$(Dir)"/>
+        
+        <MSBuild Projects="..\AtomcraftPatcher\AtomcraftPatcher.csproj" BuildInParallel="$(BuildInParallel)" Targets="Clean;Publish"
+                 Properties="Configuration=$(Configuration);
+                  RuntimeIdentifier=linux-x64;
+                  PublishDir=$(Dir)"/>
+
+        <Copy
+                SourceFiles="$(ReleaseDir)/../$(Name).gd"
+                DestinationFolder="$(Dir)"/>
+
+        <Copy
+                SourceFiles="@(ModLoaderPatchOutput)"
+                DestinationFolder="$(SubDir)" />
+
+        <Copy
+                SourceFiles="$(TargetPath)"
+                DestinationFolder="$(SubDir)" />
+
+        <Copy
+                SourceFiles="$(TargetDir)0Harmony.dll"
+                DestinationFolder="$(SubDir)" />
+
+        <Copy   Condition="Exists($(GDScriptsDir))"
+                SourceFiles="@(GDScripts)"
+                DestinationFiles="@(GDScripts->'$(SubDir)/%(RecursiveDir)%(Filename)%(Extension)')"/>
+        
+        <Copy   Condition="Exists($(DataDir))"
+                SourceFiles="@(Data)"
+                DestinationFiles="@(Data->'$(SubDir)/Data/%(RecursiveDir)%(Filename)%(Extension)')"/>
+        
+        <Copy
+                SourceFiles="$(MSBuildProjectDirectory)/../README.md"
+                DestinationFiles="$(Dir)/Instructions.md"/>
+
+        <Delete Files="$(Zip)" />
+
+        <ZipDirectory
+                SourceDirectory="$(Dir)"
+                DestinationFile="$(Zip)"
+                Overwrite="true" />
+
+        <RemoveDir Directories="$(Dir)" />
+
+        <Message
+                Importance="high"
+                Text="GodotMonoModLoader ZIP created: $(Zip)" />
+
+    </Target>
+    
+</Project>

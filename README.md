@@ -17,7 +17,7 @@ These are the steps to launch the game with mods:
 1. Download the GodotMonoModLoader.zip from Release ([Download](https://github.com/sacroimper/GodotMonoModLoader/raw/refs/heads/main/Release/GodotMonoModLoader.zip)).
 2. Extract all contents into the game installation folder (next to Atomcraft.exe).
 3. With the game closed, launch AtomcraftPatcher.exe (or AromcraftPatcher on Linux). It will confirm that the patch has been applied, and it can also be used to restore the original file.
-4. Install the mods into `%AppData%/Godot/app_userdata/Atomcraft/Mods`, or the corresponfing folder on Linux. (Alternatively, mods can also be installed in a Mods folder inside the game installation folder).
+4. Install the mods into `%AppData%/Godot/app_userdata/Atomcraft/Mods`, or the corresponding folder on Linux. (Alternatively, mods can also be installed in a Mods folder inside the game installation folder).
 5. Execute the game with the launch parameter `-s GodotMonoModLoader.gd`. This can be configured in Steam > Right-click the game in the library > Properties > General tab > Launch Options.
 
 Step 3 will need to be repeated each time the game updates.
@@ -40,23 +40,47 @@ To make a mod that loads with this Mod Loader:
 {
   "id": "<ModId>",
   "name": "<Mod Name>",
-  "description": "<Desription>",
+  "description": "<Description>",
   "author": "<author>",
   "version": "<version>",
-  "dllModules": [
+  "modules": [
     {
       "moduleId": "<ModId/ModuleId>",
       "dll": "<Path/To/Dll.dll>",
       "initClass": "<Namespace.ClassName>",
-      "dependencies": [ "<moduleId that is required to be loaded before this one>", ... ],
-      "optionalDependencies": [ "<moduleId that is NOT required to be loaded, but if it exists, load it before this one>", ... ]
-    }, ...
+      "materials": "<File or Folder to load Materials, same format as game JSON files>",
+      "reactions": "<File or Folder to load Reactions, same format as game JSON files>",
+      "translations": "<File or Folder to load translations, see JSON format below>",
+      "loadAsResourcePack": "<true or false, needed to be able to access resources from the zip with 'res://'"
+      "optional": "<true or false, with true this module will only be loaded if it is a dependency (or optionalDependency) of another module>"
+      "dependencies": [
+        "<moduleId that is required to be loaded before this one>",
+        ...
+      ],
+      "optionalDependencies": [
+        "<moduleId that is NOT required to be loaded, but if it exists, load it before this one>",
+        ...
+      ]
+    },
+    ...
   ]
 }
 ```
+- For modules, only moduleId is mandatory. The other fields can be used only when needed.
+- If initClass is defined, once the library is loaded, a **public static** method named `Initiallize` will be called. 
+Additionally, **public static** methods `OnWorldLoad` and `OnWorldSave` will also be called before loading and saving a world. A Serializable object can be received/returned on these methods to save data into the world file (it will be stored in a file <saveDir>/modded/world.json).
+- The Harmony library is already loaded by default (version 2.4.2), don't include the dll on your mod.
+- The JSON file for translations has the following format:
 
-- If initClass is defined, once the library is loaded, a public static method named `Initiallize` will be called. 
-
+```json
+{
+  "<language code, as in the game files>": {
+    "<key>": "<string>",
+    ...
+  },
+  ...
+}
+```
 ---
 
 # Contact

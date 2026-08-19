@@ -6,6 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
 
+        <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
         <SelfContained>true</SelfContained>
         <PublishSingleFile>true</PublishSingleFile>
         <PublishTrimmed>true</PublishTrimmed>
@@ -19,63 +20,6 @@
     <ItemGroup>
       <PackageReference Include="Mono.Cecil" Version="0.11.6" />
     </ItemGroup>
-
-    <Target Name="IncludePatch" BeforeTargets="AfterBuild">
-        <MSBuild Projects="..\ModLoaderPatch\ModLoaderPatch.csproj" BuildInParallel="$(BuildInParallel)" Targets="Build">
-            <Output TaskParameter="TargetOutputs" ItemName="ModLoaderPatchOutput" />
-        </MSBuild>
-
-        <!--<ItemGroup>
-            <Content Include="@(ModLoaderPatchOutput)" />
-        </ItemGroup>-->
-    </Target>
     
-    <Target Name="CreateModZip" AfterTargets="Publish">
-
-        <PropertyGroup>
-            <Name>GodotMonoModLoader</Name>
-            <ReleaseDir>$(MSBuildProjectDirectory)/../Release</ReleaseDir>
-            <Dir>$(ReleaseDir)/$(Name)</Dir>
-            <SubDir>$(Dir)/$(Name)</SubDir>
-            <Zip>$(Dir).zip</Zip>
-        </PropertyGroup>
-
-        <RemoveDir Directories="$(Dir)" />
-
-        <MakeDir Directories="$(SubDir)" />
-
-        <Copy
-                SourceFiles="$(PublishDir)../win-x64/$(ProjectName).exe"
-                DestinationFolder="$(Dir)" />
-        <Copy
-                SourceFiles="$(PublishDir)../linux-x64/$(ProjectName)"
-                DestinationFolder="$(Dir)" />
-
-        <Copy
-                SourceFiles="$(ReleaseDir)/../$(Name).gd"
-                DestinationFolder="$(Dir)"/>
-
-        <Copy
-                SourceFiles="@(ModLoaderPatchOutput)"
-                DestinationFolder="$(SubDir)" />
-
-        <Copy
-                SourceFiles="$(MSBuildProjectDirectory)/../README.md"
-                DestinationFiles="$(Dir)/Instructions.md"/>
-
-        <Delete Files="$(Zip)" />
-
-        <ZipDirectory
-                SourceDirectory="$(Dir)"
-                DestinationFile="$(Zip)"
-                Overwrite="true" />
-
-        <RemoveDir Directories="$(Dir)" />
-
-        <Message
-                Importance="high"
-                Text="GodotMonoModLoader ZIP created: $(Zip)" />
-
-    </Target>
     
 </Project>

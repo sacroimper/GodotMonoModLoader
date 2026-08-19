@@ -10,7 +10,8 @@ internal static class Program
     static int Main(string[] args)
     {
         
-        string typeToBeInjected = "Atomcraft.GodotMonoModLoader";
+        string typeToBeInjected = "Atomcraft.GodotMonoModLoaderPatch";
+        string oldType = "Atomcraft.GodotMonoModLoader";
         
         if (args.Length == 1)
         {
@@ -18,7 +19,7 @@ internal static class Program
             if (!File.Exists(_targetPath))
             {
                 Console.WriteLine($"File not found: {_targetPath}");
-                return exit(1);
+                return Exit(1);
             }
         }
         else
@@ -31,7 +32,7 @@ internal static class Program
                 if (!File.Exists(_targetPath))
                 {
                     Console.WriteLine($"File not found: {_targetPath}");
-                    return exit(1);
+                    return Exit(1);
                 }
             }
         }
@@ -48,7 +49,7 @@ internal static class Program
         if (!File.Exists(patchPath))
         {
             Console.WriteLine($"Patch Not Found: {patchPath}");
-            return exit(1);
+            return Exit(1);
         }
 
         try
@@ -79,7 +80,7 @@ internal static class Program
                 if (sourceType == null)
                 {
                     Console.WriteLine($"Class not found {typeToBeInjected} in {patchPath}.");
-                    return exit(1);
+                    return Exit(1);
                 }
 
                 TypeDefinition? existingType = targetModule.GetType(typeToBeInjected);
@@ -88,12 +89,19 @@ internal static class Program
                 {
                     Console.WriteLine($"{typeToBeInjected} class already patched.");
                     target.Dispose(); // Required to be able to restore the target with the backup
-                    return exit(1, true);
+                    return Exit(1, true);
+                }
+                
+                TypeDefinition? existingOldType = targetModule.GetType(oldType);
+                
+                if (existingOldType != null)
+                {
+                    Console.WriteLine("Old patch detected. Restore the backup or check files integrity from Steam.");
+                    target.Dispose(); // Required to be able to restore the target with the backup
+                    return Exit(1, true);
                 }
 
                 Console.WriteLine($"Injecting {typeToBeInjected}...");
-
-
 
                 Dictionary<TypeDefinition, TypeDefinition> typeMap = new();
                 Dictionary<FieldDefinition, FieldDefinition> fieldMap = new();
@@ -126,7 +134,7 @@ internal static class Program
             Console.WriteLine();
             Console.WriteLine("Patch applied.");
             
-            return exit(0, true);
+            return Exit(0, true);
         }
         catch (Exception ex)
         {
@@ -134,11 +142,11 @@ internal static class Program
             Console.WriteLine("ERROR:");
             Console.WriteLine(ex);
 
-            return exit(1);
+            return Exit(1);
         }
     }
 
-    static int exit(int exitCode, bool restore = false)
+    static int Exit(int exitCode, bool restore = false)
     {
         bool canRestore = restore && File.Exists(_targetPath + ".backup");
         Console.WriteLine();
@@ -147,13 +155,13 @@ internal static class Program
         ConsoleKeyInfo key = Console.ReadKey(true);
         if (canRestore && key.Key == ConsoleKey.R)
         {
-            restoreBackup();
-            return exit(0);
+            RestoreBackup();
+            return Exit(0);
         }
         return exitCode;
     }
 
-    static void restoreBackup()
+    static void RestoreBackup()
     {
         File.Copy(_targetPath + ".backup", _targetPath, overwrite: true);
         Console.WriteLine("Backup restored.");
