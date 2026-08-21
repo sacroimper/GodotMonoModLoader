@@ -17,7 +17,7 @@ These are the steps to launch the game with mods:
 1. Download the GodotMonoModLoader.zip from Release ([Download](https://github.com/sacroimper/GodotMonoModLoader/raw/refs/heads/main/Release/GodotMonoModLoader.zip)).
 2. Extract all contents into the game installation folder (next to Atomcraft.exe).
 3. With the game closed, launch AtomcraftPatcher.exe (or AromcraftPatcher on Linux). It will confirm that the patch has been applied, and it can also be used to restore the original file.
-4. Install the mods into `%AppData%/Godot/app_userdata/Atomcraft/Mods`, or the corresponding folder on Linux. (Alternatively, mods can also be installed in a Mods folder inside the game installation folder).
+4. Install the mods as a Zip (don't extract) into `%AppData%/Godot/app_userdata/Atomcraft/Mods`, or the corresponding folder on Linux. (Alternatively, mods can also be installed in a Mods folder inside the game installation folder).
 5. Execute the game with the launch parameter `-s GodotMonoModLoader.gd`. This can be configured in Steam > Right-click the game in the library > Properties > General tab > Launch Options.
 
 Step 3 will need to be repeated each time the game updates.

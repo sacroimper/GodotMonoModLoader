@@ -147,7 +147,7 @@ func _populate():
 
 	if mods.size() > 0:
 		mod_list.select(0)
-		_on_mod_selected(mod_list.get_item(0).id)
+		_on_mod_selected(mod_list.get_item_metadata(0))
 
 func _on_mod_selected(mod_id: String) -> void:
 	var mod = mods[mod_id]
