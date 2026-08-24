@@ -334,8 +334,8 @@ public static class SaveManagement
     public static class FileManagerPatch
     {
         [HarmonyPrefix]
-        [HarmonyPatch(nameof(FileManager.SaveWorldHeader))]
-        public static void SaveWorldHeaderPrefix(ref SaveData_World world)
+        [HarmonyPatch(nameof(FileManager.SaveWorldHeader), new Type[] { typeof(SaveData_World), typeof(bool) })]
+        public static void SaveWorldHeaderPrefix(ref SaveData_World world, bool writeToDisk)
         {
             GD.Print("[GodotMonoModLoader] Saving world...");
 

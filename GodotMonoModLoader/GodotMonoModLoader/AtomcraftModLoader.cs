@@ -43,7 +43,7 @@ public partial class AtomcraftModLoader : Node
 
     private void LoadMaterials(ZipReader reader, string file)
     {
-        GD.Print("[GodotMonoModLoader] Loading materials file...: " + file);
+        GD.Print("[GodotMonoModLoader] Loading materials file: " + file);
         string fileAsText = System.Text.Encoding.UTF8.GetString(reader.ReadFile(file));
         
         try
@@ -89,7 +89,7 @@ public partial class AtomcraftModLoader : Node
 
     private void LoadReactions(ZipReader reader, string file)
     {
-        GD.Print("[GodotMonoModLoader] Loading reactions file...: " + file);
+        GD.Print("[GodotMonoModLoader] Loading reactions file: " + file);
         string fileAsText = System.Text.Encoding.UTF8.GetString(reader.ReadFile(file));
         
         try
@@ -135,7 +135,7 @@ public partial class AtomcraftModLoader : Node
 
     private void LoadTranslations(ZipReader reader, string file)
     {
-        GD.Print("[GodotMonoModLoader] Loading translations...: " + file);
+        GD.Print("[GodotMonoModLoader] Loading translations file: " + file);
         string fileAsText = System.Text.Encoding.UTF8.GetString(reader.ReadFile(file));
         
         try
