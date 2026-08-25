@@ -53,7 +53,7 @@ public partial class AtomcraftModLoader : Node
         catch (Exception ex)
         {
             GD.PrintErr("[GodotMonoModLoader] Error deserializing JSON: " + file);
-            throw ex;
+            throw;
         }
     }
     
@@ -99,7 +99,7 @@ public partial class AtomcraftModLoader : Node
         catch (Exception ex)
         {
             GD.PrintErr("[GodotMonoModLoader] Error deserializing JSON: " + file);
-            throw ex;
+            throw;
         }
     }
     
@@ -153,7 +153,7 @@ public partial class AtomcraftModLoader : Node
         catch (Exception ex)
         {
             GD.PrintErr("[GodotMonoModLoader] Error deserializing JSON: " + file);
-            throw ex;
+            throw;
         }
     }
 

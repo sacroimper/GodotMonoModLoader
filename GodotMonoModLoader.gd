@@ -68,12 +68,12 @@ func load_game() -> void:
 func load_mod_loader():
 	var Patch = load("res://GodotMonoModLoaderPatch/GodotMonoModLoaderPatch.cs")
 	if Patch == null:
-		log_message("The game has to be patched to be able to load mods.")
+		log_message("The game needs to be patched to be able to load mods.")
 		return false
 
 	var patch = Patch.new()
 	if patch == null:
-		log_message("The game has to be patched to be able to load mods.")
+		log_message("The game needs to be patched to be able to load mods.")
 		return false
 
 	var mod_loader_dir = OS.get_executable_path().get_base_dir().path_join("GodotMonoModLoader")
@@ -261,11 +261,26 @@ func lookup_mods() -> Dictionary[String, ModInfo]:
 	register_bundled_mods(mod_list)
 	read_mods(mod_list, lookup_zips(OS.get_executable_path().get_base_dir().path_join("Mods")))
 	read_mods(mod_list, lookup_zips(OS.get_user_data_dir().path_join("Mods")))
-	# TODO read mods from steam
+	# TODO read mods from steam when it gets implemented
 
 	return mod_list
 
 func register_bundled_mods(mod_list: Dictionary[String, ModInfo]):
+
+
+
+	var mod: ModInfo = ModInfo.new()
+
+	mod.id = "GodotMonoModLoader"
+	mod.name = "Mod Loader"
+	mod.description = "This mod loader is used to load all the mods."
+	mod.author = "sacroimper"
+	mod.version = "@VERSION@"
+	mod.modules = {}
+	mod.path = "bundled"
+
+	mod_list.set(mod.id, mod)
+
 
 	var modules: Dictionary[String, ModuleInfo] = {}
 	
@@ -275,21 +290,18 @@ func register_bundled_mods(mod_list: Dictionary[String, ModInfo]):
 	module.state = ModuleState.LOADED
 
 	modules.set(module.moduleId, module)
-    
-	module = ModuleInfo.new()
-	module.modId = "0Harmony"
-	module.moduleId = "0Harmony/Wrapper"
-	module.state = ModuleState.LOADED
 
-	modules.set(module.moduleId, module)
 
-	var mod: ModInfo = ModInfo.new()
+	mod = ModInfo.new()
 
 	mod.id = "0Harmony"
 	mod.name = "Harmony"
+	mod.description = "Harmony library, used by other mods."
+	mod.author = "Andreas Pardeike (main author of the library)"
+	mod.version = "@HARMONY_VERSION@"
 	mod.modules = modules
 	mod.path = "bundled"
-
+	
 	mod_list.set(mod.id, mod)
 
 func read_mods(mod_list : Dictionary[String, ModInfo], mod_paths: Array[String]):

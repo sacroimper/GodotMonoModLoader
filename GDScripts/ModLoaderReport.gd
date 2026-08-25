@@ -138,13 +138,14 @@ func _populate():
 	mod_list.clear()
 
 	for mod in mods.values():
-		if mod.path == "bundled":
-			continue
 		mod_list.add_item(mod.name)
 		mod_list.set_item_metadata(mod_list.get_item_count() - 1, mod.id);
 
 	mod_list.item_selected.connect(func(idx): _on_mod_selected(mod_list.get_item_metadata(idx)))
 
+	if mods.size() > 0:
+		mod_list.select(0)
+		_on_mod_selected(mod_list.get_item_metadata(0))
 
 func _on_mod_selected(mod_id: String) -> void:
 	var mod = mods[mod_id]
@@ -160,31 +161,35 @@ func _on_mod_selected(mod_id: String) -> void:
 	mod_details.append_text("[b]Description[/b]\n")
 	mod_details.append_text("%s\n\n" % mod.description)
 
-	mod_details.append_text("[b]Modules[/b]\n")
+	if mod.modules:
+		mod_details.append_text("[b]Modules[/b]\n")
 
-	for module in mod.modules.values():
-		var status := ""
+		for module in mod.modules.values():
+			var status := ""
 
-		match module.state:
-			ModuleState.LOADED:
-				status = "[color=lime]✓ Loaded[/color]"
+			match module.state:
+				ModuleState.LOADED:
+					status = "[color=lime]✓ Loaded[/color]"
 
-			ModuleState.ERROR:
-				status = "[color=red]✗ Error[/color]"
+				ModuleState.ERROR:
+					status = "[color=red]✗ Error[/color]"
 
-			ModuleState.OPTIONAL:
-				status = "[color=yellow]○ Optional[/color]"
+				ModuleState.OPTIONAL:
+					status = "[color=yellow]○ Optional[/color]"
 
-			ModuleState.READY:
-				status = "Ready"
+				ModuleState.READY:
+					status = "Ready"
 
-			_:
-				status = "Default"
+				_:
+					status = "Default"
 
-		mod_details.append_text("• %s — %s\n" % [
-			module.moduleId,
-			status
-		])
+			mod_details.append_text("• %s — %s\n" % [
+				module.moduleId,
+				status
+			])
 
-		if module.state == ModuleState.ERROR:
-			mod_details.append_text("    [color=red]%s[/color]\n" % module.error_message)
+			if module.state == ModuleState.ERROR:
+				mod_details.append_text("    [color=red]%s[/color]\n" % module.error_message)
+		
+	
+	mod_details.append_text("\n[b]Location:[/b] %s\n" % mod.path)

@@ -4,9 +4,11 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <Version>0.2.0</Version>
 
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
         <BaseDirectory>GodotMonoModLoader</BaseDirectory>
+        <HarmonyVersion>2.4.2</HarmonyVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -26,13 +28,32 @@
             <OutputItemType>Analyzer</OutputItemType>
             <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
         </PackageReference>
-        <PackageReference Include="Lib.Harmony" Version="2.4.2"  />
+        <PackageReference Include="Lib.Harmony" Version="$(HarmonyVersion)"  />
     </ItemGroup>
 
 <!--    <PropertyGroup>-->
 <!--        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>-->
 <!--        <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>-->
 <!--    </PropertyGroup>-->
+    <UsingTask
+            TaskName="ReplaceText"
+            TaskFactory="RoslynCodeTaskFactory"
+            AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <File ParameterType="System.String" Required="true"/>
+            <Search ParameterType="System.String" Required="true"/>
+            <Replace ParameterType="System.String" Required="true"/>
+        </ParameterGroup>
+        <Task>
+            <Code Type="Fragment" Language="cs">
+                <![CDATA[
+                  var text = System.IO.File.ReadAllText(File);
+                  text = text.Replace(Search, Replace);
+                  System.IO.File.WriteAllText(File, text);
+                  ]]>
+            </Code>
+        </Task>
+    </UsingTask>
     
     <PropertyGroup>
         <GodotProjectDir>$(MSBuildProjectDirectory)</GodotProjectDir>
@@ -70,6 +91,8 @@
     </ItemGroup>
 
 
+    
+    
     
 
     <Target Name="CreateZip" BeforeTargets="AfterBuild">
@@ -111,6 +134,15 @@
         <Copy
                 SourceFiles="$(ReleaseDir)/../$(Name).gd"
                 DestinationFolder="$(Dir)"/>
+
+        <ReplaceText
+                File="$(Dir)/$(Name).gd"
+                Search="@VERSION@"
+                Replace="$(Version)" />
+        <ReplaceText
+                File="$(Dir)/$(Name).gd"
+                Search="@HARMONY_VERSION@"
+                Replace="$(HarmonyVersion)" />
 
         <Copy
                 SourceFiles="@(ModLoaderPatchOutput)"

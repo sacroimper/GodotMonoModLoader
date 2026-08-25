@@ -5,12 +5,13 @@ using HarmonyLib;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Console = System.Console;
+using FileAccess = Godot.FileAccess;
 
 namespace GodotMonoModLoader;
 
 public static class SaveManagement
 {
-    private static SaveData_ModdedWorld? ModdedWorld;
+    private static SaveData_ModdedUniverse? _moddedUniverse;
 
     [Serializable]
     public class SaveData_ModdedSpaceship
@@ -26,16 +27,24 @@ public static class SaveManagement
     }
 
     [Serializable]
-    public class SaveData_ModdedWorld
+    public class SaveData_ModdedUniverse(string worldName)
     {
+        public string WorldName = worldName;
         public Dictionary<string, SaveData_ModdedPlayer> Players = [];
         public SaveData_ModdedSpaceship Spaceship = new();
         public Dictionary<string, JToken?> ModsData = new();
     }
+    
+    public static SaveData_ModdedUniverse GetOrCreateModdedUniverse(string worldName)
+    {
+        _moddedUniverse ??= new SaveData_ModdedUniverse(worldName);
+        _moddedUniverse.WorldName = worldName;
+        return _moddedUniverse;
+    }
 
     public static bool LoadFile(string filePath, out string content)
     {
-        Godot.FileAccess fileAccess = Godot.FileAccess.Open(filePath, Godot.FileAccess.ModeFlags.Read);
+        FileAccess fileAccess = FileAccess.Open(filePath, Godot.FileAccess.ModeFlags.Read);
         if (fileAccess == null)
         {
             GD.PrintErr("[GodotMonoModLoader] Failed to open file: " + filePath);
@@ -66,8 +75,8 @@ public static class SaveManagement
 
     public static void SaveFile(string filePath, string content)
     {
-        Godot.FileAccess fileAccess = Godot.FileAccess.Open(filePath, Godot.FileAccess.ModeFlags.Write);
-        Error error = fileAccess.GetError();
+        FileAccess fileAccess = FileAccess.Open(filePath, Godot.FileAccess.ModeFlags.Write);
+        Error error = fileAccess?.GetError() ?? Error.CantOpen;
         switch (error)
         {
             case Error.Ok:
@@ -104,20 +113,94 @@ public static class SaveManagement
 
     public static string GetModdedSaveDir(string worldName)
     {
-        return $"user://Worlds/{worldName}/modded";
+        return $"user://Worlds/{worldName}/modded"; // Old save dir
     }
 
     public static string GetModdedSavePath(string worldName)
     {
-        return GetModdedSaveDir(worldName).PathJoin("world.json");
+        return GetModdedSaveDir(worldName).PathJoin("world.json"); // Old modded save file
     }
 
-    public static void ModOnWorldLoad(Type entryClass, SaveData_World worldData, JToken? modData)
+    public static string GetModdedUniversePath(string worldName)
+    {
+        return $"user://Worlds/{worldName}.moddedUniverse";
+    }
+
+    private static void LoadModdedUniverse(SaveData_Universe universe)
+    {
+        GD.Print("[GodotMonoModLoader] Loading modded universe...");
+
+        SaveData_World world = universe.World;
+        
+        try
+        {
+            if ((FileAccess.FileExists(GetModdedUniversePath(world.Name))
+                && LoadFile(GetModdedUniversePath(world.Name), out var content))
+                || (DirAccess.DirExistsAbsolute(GetModdedSaveDir(world.Name)) // Old save dir
+                    && LoadFile(GetModdedSavePath(world.Name), out content))) // Old modded save file
+            {
+                _moddedUniverse = JsonConvert.DeserializeObject<SaveData_ModdedUniverse>(content);
+            }
+            else
+            {
+                _moddedUniverse = null;
+            }
+
+            LoadModdedMaterials(universe);
+
+            foreach (var entryClass in GodotMonoModLoader.EntryClasses)
+            {
+                ModOnUniverseLoad(entryClass.Value, universe, _moddedUniverse?.ModsData.GetValueOrDefault(entryClass.Key));
+            }
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr("[GodotMonoModLoader] Error while loading modded world: ", e.Message);
+            GD.PrintErr(e);
+        }
+    }
+    
+    private static void SaveModdedUniverse(SaveData_Universe universe)
+    {
+        GD.Print("[GodotMonoModLoader] Saving modded universe...");
+
+        try
+        {
+            string worldName = universe.World.Name;
+                
+            SaveModdedMaterials(universe);
+
+            foreach (KeyValuePair<string, Type> entryClass in GodotMonoModLoader.EntryClasses)
+            {
+                if (ModOnUniverseSave(entryClass.Value, universe, out var modData))
+                {
+                    SaveData_ModdedUniverse moddedUniverse = GetOrCreateModdedUniverse(worldName);
+
+                    moddedUniverse.ModsData[entryClass.Key] = modData;
+                }
+
+                ;
+            }
+
+            if (_moddedUniverse != null)
+            {
+                string moddedSavePath = GetModdedUniversePath(worldName);
+                SaveFile(moddedSavePath, JsonConvert.SerializeObject(_moddedUniverse, Formatting.None));
+            }
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr("[GodotMonoModLoader] Error while saving modded world: ", e.Message);
+            GD.PrintErr(e);
+        }
+    }
+    
+    public static void ModOnUniverseLoad(Type entryClass, SaveData_Universe universe, JToken? modData)
     {
         try
         {
             MethodInfo? onLoadMethod = entryClass.GetMethod(
-                "OnWorldLoad",
+                "OnUniverseLoad",
                 BindingFlags.Public |
                 BindingFlags.Static
             );
@@ -128,9 +211,13 @@ public static class SaveManagement
                 List<object?> parameters = [];
                 foreach (ParameterInfo parameterInfo in methodParameters)
                 {
-                    if (parameterInfo.ParameterType == typeof(SaveData_World))
+                    if (parameterInfo.ParameterType == typeof(SaveData_Universe))
                     {
-                        parameters.Add(worldData);
+                        parameters.Add(universe);
+                    }
+                    else if (parameterInfo.ParameterType == typeof(SaveData_World))
+                    {
+                        parameters.Add(universe.World);
                     }
                     else if (modData != null)
                     {
@@ -149,7 +236,7 @@ public static class SaveManagement
                     }
                 }
 
-                onLoadMethod.Invoke(null, parameters.ToArray());
+                onLoadMethod.Invoke(null, [.. parameters]);
             }
         }
         catch (Exception e)
@@ -158,12 +245,12 @@ public static class SaveManagement
         }
     }
 
-    public static bool ModOnWorldSave(Type entryClass, SaveData_World worldData, out JToken? modData)
+    public static bool ModOnUniverseSave(Type entryClass, SaveData_Universe universe, out JToken? modData)
     {
         try
         {
             MethodInfo? onSaveMethod = entryClass.GetMethod(
-                "OnWorldSave",
+                "OnUniverseSave",
                 BindingFlags.Public |
                 BindingFlags.Static
             );
@@ -174,9 +261,13 @@ public static class SaveManagement
                 List<object?> parameters = [];
                 foreach (ParameterInfo parameterInfo in methodParameters)
                 {
-                    if (parameterInfo.ParameterType == typeof(SaveData_World))
+                    if (parameterInfo.ParameterType == typeof(SaveData_Universe))
                     {
-                        parameters.Add(worldData);
+                        parameters.Add(universe);
+                    }
+                    else if (parameterInfo.ParameterType == typeof(SaveData_World))
+                    {
+                        parameters.Add(universe.World);
                     }
                     else
                     {
@@ -202,14 +293,16 @@ public static class SaveManagement
         return false;
     }
 
-    private static void LoadModdedMaterials(SaveData_World world)
+    private static void LoadModdedMaterials(SaveData_Universe universe)
     {
-        if (ModdedWorld == null)
+        if (_moddedUniverse == null)
         {
             return;
         }
 
-        foreach (var material in ModdedWorld.Spaceship.Inventory)
+        SaveData_World world = universe.World;
+        
+        foreach (var material in _moddedUniverse.Spaceship.Inventory)
         {
             if (material.Key.ToMaterialTypeId() != -1
                 && world.Spaceship.InventorySlots.All(i => i.MaterialTypeName != material.Key))
@@ -224,7 +317,7 @@ public static class SaveManagement
 
         foreach (var player in world.Players)
         {
-            if (ModdedWorld.Players.TryGetValue(player.PlayerName, out var moddedPlayer))
+            if (_moddedUniverse.Players.TryGetValue(player.PlayerName, out var moddedPlayer))
             {
                 List<SaveData_InventorySlot> inventorySlotsToAdd = [];
                 foreach (var material in moddedPlayer.Inventory)
@@ -257,23 +350,22 @@ public static class SaveManagement
         }
     }
 
-    private static void SaveModdedMaterials(SaveData_World world)
+    private static void SaveModdedMaterials(SaveData_Universe universe)
     {
         if (AtomcraftModLoader.MaterialsToAdd.Count > 0)
         {
-            if (ModdedWorld == null)
-            {
-                ModdedWorld = new SaveData_ModdedWorld();
-            }
+            SaveData_World world = universe.World;
+            SaveData_ModdedUniverse moddedUniverse = GetOrCreateModdedUniverse(world.Name);
 
             List<short> materialIdsToSave =
                 AtomcraftModLoader.MaterialsToAdd.ConvertAll(material => material.Name.ToMaterialTypeId());
             List<string> materialNamesToSave =
                 AtomcraftModLoader.MaterialsToAdd.ConvertAll(material => material.Name);
 
+            
             foreach (var saveDataPlayer in world.Players)
             {
-                SaveData_ModdedPlayer moddedPlayer = ModdedWorld.Players.GetValueOrDefault(
+                SaveData_ModdedPlayer moddedPlayer = moddedUniverse.Players.GetValueOrDefault(
                     saveDataPlayer.PlayerName,
                     new SaveData_ModdedPlayer(saveDataPlayer.PlayerName));
 
@@ -283,96 +375,57 @@ public static class SaveManagement
 
                 if (moddedPlayer.Inventory.Count > 0)
                 {
-                    ModdedWorld.Players[moddedPlayer.PlayerName] = moddedPlayer;
+                    moddedUniverse.Players[moddedPlayer.PlayerName] = moddedPlayer;
                 }
             }
 
             SaveData_ModdedSpaceship moddedSpaceship = new SaveData_ModdedSpaceship();
             world.Spaceship.InventorySlots.DoIf(
                 i => materialNamesToSave.Contains(i.MaterialTypeName),
-                i => ModdedWorld.Spaceship.Inventory[i.MaterialTypeName] = i.Amount);
-        }
-    }
-
-    [HarmonyPatch(typeof(Game))]
-    public static class GamePatch
-    {
-        [HarmonyPrefix]
-        [HarmonyPatch(nameof(Game.LoadWorldHeaderData))]
-        public static void LoadWorldHeaderDataPrefix(ref SaveData_World world)
-        {
-            GD.Print("[GodotMonoModLoader] Loading world...");
-
-            try
-            {
-                if (DirAccess.DirExistsAbsolute(GetModdedSaveDir(world.Name))
-                    && LoadFile(GetModdedSavePath(world.Name), out var content))
-                {
-                    ModdedWorld = JsonConvert.DeserializeObject<SaveData_ModdedWorld>(content);
-                }
-                else
-                {
-                    ModdedWorld = null;
-                }
-
-                LoadModdedMaterials(world);
-
-                foreach (var entryClass in GodotMonoModLoader.EntryClasses)
-                {
-                    ModOnWorldLoad(entryClass.Value, world, ModdedWorld?.ModsData.GetValueOrDefault(entryClass.Key));
-                }
-            }
-            catch (Exception e)
-            {
-                GD.PrintErr("[GodotMonoModLoader] Error while loading modded world: ", e.Message);
-                GD.PrintErr(e);
-            }
+                i => moddedUniverse.Spaceship.Inventory[i.MaterialTypeName] = i.Amount);
         }
     }
 
     [HarmonyPatch(typeof(FileManager))]
     public static class FileManagerPatch
     {
-        [HarmonyPrefix]
-        [HarmonyPatch(nameof(FileManager.SaveWorldHeader), new Type[] { typeof(SaveData_World), typeof(bool) })]
-        public static void SaveWorldHeaderPrefix(ref SaveData_World world, bool writeToDisk)
+       
+        [HarmonyPostfix]
+        [HarmonyPatch("TryLoadUniverseFile")]
+        public static void TryLoadUniverseFilePostfix(string filePath, ref SaveData_Universe universe, bool __result)
         {
-            GD.Print("[GodotMonoModLoader] Saving world...");
-
-            try
+            if (__result)
             {
-                SaveModdedMaterials(world);
-
-                foreach (var entryClass in GodotMonoModLoader.EntryClasses)
-                {
-                    if (ModOnWorldSave(entryClass.Value, world, out var modData))
-                    {
-                        if (ModdedWorld == null)
-                        {
-                            ModdedWorld = new SaveData_ModdedWorld();
-                        }
-
-                        ModdedWorld.ModsData[entryClass.Key] = modData;
-                    }
-
-                    ;
-                }
-
-                if (ModdedWorld != null)
-                {
-                    string moddedSaveDir = GetModdedSaveDir(world.Name);
-                    if (EnsureDirExists(moddedSaveDir))
-                    {
-                        string moddedSavePath = GetModdedSavePath(world.Name);
-                        SaveFile(moddedSavePath, JsonConvert.SerializeObject(ModdedWorld, Formatting.None));
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                GD.PrintErr("[GodotMonoModLoader] Error while saving modded world: ", e.Message);
-                GD.PrintErr(e);
+                LoadModdedUniverse(universe);
             }
         }
+        
+        [HarmonyPostfix]
+        [HarmonyPatch("BuildUniverseFromLegacyWorld")]
+        public static void BuildUniverseFromLegacyWorldPostfix(string worldName, ref SaveData_Universe __result)
+        {
+            LoadModdedUniverse(__result);
+        }
+        
+        [HarmonyPrefix]
+        [HarmonyPatch("WriteUniverseToDisk")]
+        public static void WriteUniverseToDiskPrefix(ref SaveData_Universe universe)
+        {
+            SaveModdedUniverse(universe);
+        }
+        
+        [HarmonyPrefix]
+        [HarmonyPatch("SaveFileAtomic")]
+        public static void SaveFileAtomicPrefix(string filePath, ref string content)
+        {
+            if (filePath.EndsWith(".universe") && Path.GetFileNameWithoutExtension(filePath) != _moddedUniverse?.WorldName)
+            {
+                SaveData_Universe universe = JsonConvert.DeserializeObject<SaveData_Universe>(content);
+                SaveModdedUniverse(universe);
+                // content = JsonConvert.SerializeObject(universe);
+            }
+        }
+        
+        
     }
 }
