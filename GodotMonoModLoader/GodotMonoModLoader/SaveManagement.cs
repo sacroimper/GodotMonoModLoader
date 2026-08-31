@@ -130,10 +130,10 @@ public static class SaveManagement
     {
         GD.Print("[GodotMonoModLoader] Loading modded universe...");
 
-        SaveData_World world = universe.World;
-        
         try
         {
+            SaveData_World world = universe.World;
+            
             if ((FileAccess.FileExists(GetModdedUniversePath(world.Name))
                 && LoadFile(GetModdedUniversePath(world.Name), out var content))
                 || (DirAccess.DirExistsAbsolute(GetModdedSaveDir(world.Name)) // Old save dir
@@ -181,7 +181,6 @@ public static class SaveManagement
                     moddedUniverse.ModsData[entryClass.Key] = modData;
                 }
 
-                ;
             }
 
             if (_moddedUniverse != null)
@@ -359,34 +358,34 @@ public static class SaveManagement
         if (AtomcraftModLoader.MaterialsToAdd.Count > 0)
         {
             SaveData_World world = universe.World;
-            SaveData_ModdedUniverse moddedUniverse = GetOrCreateModdedUniverse(world.Name);
 
             List<short> materialIdsToSave =
                 AtomcraftModLoader.MaterialsToAdd.ConvertAll(material => material.Name.ToMaterialTypeId());
             List<string> materialNamesToSave =
                 AtomcraftModLoader.MaterialsToAdd.ConvertAll(material => material.Name);
 
-            
-            foreach (var saveDataPlayer in world.Players)
+            if (world.Players != null)
             {
-                SaveData_ModdedPlayer moddedPlayer = moddedUniverse.Players.GetValueOrDefault(
-                    saveDataPlayer.PlayerName,
-                    new SaveData_ModdedPlayer(saveDataPlayer.PlayerName));
-
-                saveDataPlayer.InventorySlots.DoIf(
-                    i => materialIdsToSave.Contains(i.MaterialTypeId),
-                    i => moddedPlayer.Inventory[i.MaterialTypeId.ToMaterialName()] = i.Amount);
-
-                if (moddedPlayer.Inventory.Count > 0)
+                foreach (var saveDataPlayer in world.Players)
                 {
-                    moddedUniverse.Players[moddedPlayer.PlayerName] = moddedPlayer;
+                    SaveData_ModdedPlayer moddedPlayer = _moddedUniverse?.Players.GetValueOrDefault(
+                        saveDataPlayer.PlayerName) ?? new SaveData_ModdedPlayer(saveDataPlayer.PlayerName);
+
+                    saveDataPlayer.InventorySlots.DoIf(
+                        i => materialIdsToSave.Contains(i.MaterialTypeId),
+                        i => moddedPlayer.Inventory[i.MaterialTypeId.ToMaterialName()] = i.Amount);
+
+                    if (moddedPlayer.Inventory.Count > 0)
+                    {
+                        GetOrCreateModdedUniverse(world.Name).Players[moddedPlayer.PlayerName] = moddedPlayer;
+                    }
                 }
             }
 
             SaveData_ModdedSpaceship moddedSpaceship = new SaveData_ModdedSpaceship();
-            world.Spaceship.InventorySlots.DoIf(
+            world.Spaceship?.InventorySlots?.DoIf(
                 i => materialNamesToSave.Contains(i.MaterialTypeName),
-                i => moddedUniverse.Spaceship.Inventory[i.MaterialTypeName] = i.Amount);
+                i => GetOrCreateModdedUniverse(world.Name).Spaceship.Inventory[i.MaterialTypeName] = i.Amount);
         }
     }
 
@@ -413,19 +412,22 @@ public static class SaveManagement
                 LoadModdedUniverse(__result);
             }
         }
+
+        private static string? _currentWorldName;
         
         [HarmonyPrefix]
         [HarmonyPatch("WriteUniverseToDisk")]
         public static void WriteUniverseToDiskPrefix(ref SaveData_Universe universe)
         {
             SaveModdedUniverse(universe);
+            _currentWorldName = universe?.World?.Name;
         }
         
         [HarmonyPrefix]
         [HarmonyPatch("SaveFileAtomic")]
         public static void SaveFileAtomicPrefix(string filePath, ref string content)
         {
-            if (filePath.EndsWith(".universe") && Path.GetFileNameWithoutExtension(filePath) != _moddedUniverse?.WorldName)
+            if (filePath.EndsWith(".universe") && Path.GetFileNameWithoutExtension(filePath) != _currentWorldName)
             {
                 SaveData_Universe universe = JsonConvert.DeserializeObject<SaveData_Universe>(content);
                 SaveModdedUniverse(universe);
