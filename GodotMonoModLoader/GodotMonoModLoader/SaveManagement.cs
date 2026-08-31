@@ -152,6 +152,8 @@ public static class SaveManagement
             {
                 ModOnUniverseLoad(entryClass.Value, universe, _moddedUniverse?.ModsData.GetValueOrDefault(entryClass.Key));
             }
+            
+            GD.Print("[GodotMonoModLoader] Modded universe loaded.");
         }
         catch (Exception e)
         {
@@ -187,6 +189,8 @@ public static class SaveManagement
                 string moddedSavePath = GetModdedUniversePath(worldName);
                 SaveFile(moddedSavePath, JsonConvert.SerializeObject(_moddedUniverse, Formatting.None));
             }
+            
+            GD.Print("[GodotMonoModLoader] Modded universe saved.");
         }
         catch (Exception e)
         {
@@ -399,12 +403,15 @@ public static class SaveManagement
                 LoadModdedUniverse(universe);
             }
         }
-        
+
         [HarmonyPostfix]
         [HarmonyPatch("BuildUniverseFromLegacyWorld")]
         public static void BuildUniverseFromLegacyWorldPostfix(string worldName, ref SaveData_Universe __result)
         {
-            LoadModdedUniverse(__result);
+            if (__result != null)
+            {
+                LoadModdedUniverse(__result);
+            }
         }
         
         [HarmonyPrefix]

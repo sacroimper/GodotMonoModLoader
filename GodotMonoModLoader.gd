@@ -194,6 +194,10 @@ func load_module(mod: ModInfo, module: ModuleInfo) -> bool:
 	log_message(str("Loading Mod: ", mod.id, ", Module: ", module.moduleId))
 	log_message(str("Zip: ", mod.path))
 
+
+	if module.loadAsResourcePack:
+		ProjectSettings.load_resource_pack(mod.path)
+		
 	if module.dll:
 		if !load_dll(mod, module):
 			return false
@@ -209,9 +213,6 @@ func load_module(mod: ModInfo, module: ModuleInfo) -> bool:
 	if module.translations:
 		if !load_translations(mod, module):
 			return false
-
-	if module.loadAsResourcePack:
-		ProjectSettings.load_resource_pack(mod.path)
 
 	log_message(str("Module loaded correctly: ", module.moduleId))
 	return true

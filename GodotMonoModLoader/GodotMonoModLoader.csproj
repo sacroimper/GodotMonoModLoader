@@ -75,25 +75,7 @@
         <CompilerVisibleProperty Include="EnableGodotGenerators" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Compile Remove="GodotMonoModLoader\Logger\**" />
-      <Compile Remove="GodotMonoModLoader\UI\**" />
-    </ItemGroup>
 
-    <ItemGroup>
-      <EmbeddedResource Remove="GodotMonoModLoader\Logger\**" />
-      <EmbeddedResource Remove="GodotMonoModLoader\UI\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Remove="GodotMonoModLoader\Logger\**" />
-      <None Remove="GodotMonoModLoader\UI\**" />
-    </ItemGroup>
-
-
-    
-    
-    
 
     <Target Name="CreateZip" BeforeTargets="AfterBuild">
 
