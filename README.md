@@ -23,6 +23,35 @@ These are the steps to launch the game with mods:
 Step 3 will need to be repeated each time the game updates.
 
 
+## Running the patcher from a script
+
+Step 3 can be automated. When stdin is not a terminal (a pipe, a file, or a CI log) the patcher skips the "Press ANY key" prompt and reports the outcome through its exit code:
+
+```sh
+AtomcraftPatcher /path/to/data_Atomcraft_windows_x86_64/Atomcraft.dll < /dev/null
+```
+
+| Option | Effect |
+| --- | --- |
+| `-y`, `--non-interactive` | Never wait for a keypress, even on a terminal. |
+| `--restore` | Restore the backup instead of patching. |
+| `--fail-if-patched` | Exit 6 instead of 0 when the target is already patched. |
+| `--quiet` | Suppress progress output. Errors still go to stderr. |
+| `-h`, `--help` | Show usage. |
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | Patch applied, or already patched |
+| 1 | Unclassified failure |
+| 2 | Usage error |
+| 3 | Atomcraft.dll or backup not found |
+| 4 | ModLoaderPatch.dll missing or unusable |
+| 5 | Old patch detected, restore required |
+| 6 | Already patched, with `--fail-if-patched` |
+
+A successful patch always exits 0, so `AtomcraftPatcher ... < /dev/null || exit 1` is enough to detect a failure. Use `--fail-if-patched` when a no-op needs to be distinguished from work actually done.
+
+
 # Mods
 
 Here is a list of the mods I've made: [AtomcraftMods](https://github.com/sacroimper/AtomcraftMods). I'm sure the community will share more through Atomcraft Official discord.

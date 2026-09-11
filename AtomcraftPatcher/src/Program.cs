@@ -5,39 +5,72 @@ namespace AtomcraftPatcher;
 
 internal static class Program
 {
+    private const int ExitSuccess = 0;
+    private const int ExitFailure = 1;
+    private const int ExitUsage = 2;
+    private const int ExitTargetNotFound = 3;
+    private const int ExitPatchUnusable = 4;
+    private const int ExitOldPatch = 5;
+    private const int ExitAlreadyPatched = 6;
+
     private static string _targetPath = Path.Combine(AppContext.BaseDirectory, "data_Atomcraft_windows_x86_64", "Atomcraft.dll");
-    
+
+    private static bool _nonInteractive;
+    private static bool _quiet;
+    private static bool _failIfPatched;
+    private static bool _restoreOnly;
+
+    private static bool IsInteractive =>
+        !_nonInteractive && !Console.IsInputRedirected && Environment.UserInteractive;
+
     static int Main(string[] args)
     {
         
         string typeToBeInjected = "Atomcraft.GodotMonoModLoaderPatch";
         string oldType = "Atomcraft.GodotMonoModLoader";
-        
-        if (args.Length == 1)
+
+        if (!TryParseArguments(args, out string? targetArgument, out bool showHelp))
         {
-            _targetPath = Path.GetFullPath(args[0]);
+            PrintUsage(Console.Error);
+            return Exit(ExitUsage);
+        }
+
+        if (showHelp)
+        {
+            PrintUsage(Console.Out);
+            return ExitSuccess;
+        }
+
+        if (targetArgument != null)
+        {
+            _targetPath = Path.GetFullPath(targetArgument);
             if (!File.Exists(_targetPath))
             {
-                Console.WriteLine($"File not found: {_targetPath}");
-                return Exit(1);
+                Error($"File not found: {_targetPath}");
+                return Exit(ExitTargetNotFound);
             }
         }
         else
         {
             if (!File.Exists(_targetPath))
             {
-                Console.WriteLine($"File not found: {_targetPath}");
-                Console.WriteLine("Trying one folder up.");
+                Info($"File not found: {_targetPath}");
+                Info("Trying one folder up.");
                 _targetPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "data_Atomcraft_windows_x86_64", "Atomcraft.dll"));
                 if (!File.Exists(_targetPath))
                 {
-                    Console.WriteLine($"File not found: {_targetPath}");
-                    return Exit(1);
+                    Error($"File not found: {_targetPath}");
+                    return Exit(ExitTargetNotFound);
                 }
             }
         }
 
-        Console.WriteLine($"File to patch located: {_targetPath}.");
+        Info($"File to patch located: {_targetPath}.");
+
+        if (_restoreOnly)
+        {
+            return Exit(RestoreBackup());
+        }
 
         
         string patcherDirectory = AppContext.BaseDirectory;
@@ -48,13 +81,13 @@ internal static class Program
 
         if (!File.Exists(patchPath))
         {
-            Console.WriteLine($"Patch Not Found: {patchPath}");
-            return Exit(1);
+            Error($"Patch Not Found: {patchPath}");
+            return Exit(ExitPatchUnusable);
         }
 
         try
         {
-            Console.WriteLine("Reading Atomcraft.dll...");
+            Info("Reading Atomcraft.dll...");
 
             using DefaultAssemblyResolver resolver = new DefaultAssemblyResolver();
             
@@ -79,29 +112,29 @@ internal static class Program
 
                 if (sourceType == null)
                 {
-                    Console.WriteLine($"Class not found {typeToBeInjected} in {patchPath}.");
-                    return Exit(1);
+                    Error($"Class not found {typeToBeInjected} in {patchPath}.");
+                    return Exit(ExitPatchUnusable);
                 }
 
                 TypeDefinition? existingType = targetModule.GetType(typeToBeInjected);
 
                 if (existingType != null)
                 {
-                    Console.WriteLine($"{typeToBeInjected} class already patched.");
+                    Info($"{typeToBeInjected} class already patched.");
                     target.Dispose(); // Required to be able to restore the target with the backup
-                    return Exit(1, true);
+                    return Exit(_failIfPatched ? ExitAlreadyPatched : ExitSuccess, true);
                 }
                 
                 TypeDefinition? existingOldType = targetModule.GetType(oldType);
                 
                 if (existingOldType != null)
                 {
-                    Console.WriteLine("Old patch detected. Restore the backup or check files integrity from Steam.");
+                    Error("Old patch detected. Restore the backup or check files integrity from Steam.");
                     target.Dispose(); // Required to be able to restore the target with the backup
-                    return Exit(1, true);
+                    return Exit(ExitOldPatch, true);
                 }
 
-                Console.WriteLine($"Injecting {typeToBeInjected}...");
+                Info($"Injecting {typeToBeInjected}...");
 
                 Dictionary<TypeDefinition, TypeDefinition> typeMap = new();
                 Dictionary<FieldDefinition, FieldDefinition> fieldMap = new();
@@ -119,52 +152,179 @@ internal static class Program
                 //         $"{reference.FullName}");
                 // }
 
-                Console.WriteLine("Creating backup...");
+                Info("Creating backup...");
 
                 File.Copy(_targetPath, backupPath, overwrite: true);
                 
-                Console.WriteLine($"Backup created: {backupPath}");
-                Console.WriteLine("Applying patch...");
+                Info($"Backup created: {backupPath}");
+                Info("Applying patch...");
                 
                 target.Write(tempPath);
             }
 
             File.Move(tempPath, _targetPath, overwrite: true);
 
-            Console.WriteLine();
-            Console.WriteLine("Patch applied.");
+            Info();
+            Info("Patch applied.");
             
-            return Exit(0, true);
+            return Exit(ExitSuccess, true);
         }
         catch (Exception ex)
         {
-            Console.WriteLine();
-            Console.WriteLine("ERROR:");
-            Console.WriteLine(ex);
+            Error();
+            Error("ERROR:");
+            Error(ex.ToString());
 
-            return Exit(1);
+            return Exit(ExitFailure);
         }
+    }
+
+    static bool TryParseArguments(string[] args, out string? targetArgument, out bool showHelp)
+    {
+        targetArgument = null;
+        showHelp = false;
+
+        bool optionsEnded = false;
+
+        foreach (string arg in args)
+        {
+            if (!optionsEnded)
+            {
+                switch (arg)
+                {
+                    case "--":
+                        optionsEnded = true;
+                        continue;
+                    case "-y":
+                    case "--non-interactive":
+                        _nonInteractive = true;
+                        continue;
+                    case "--quiet":
+                        _quiet = true;
+                        continue;
+                    case "--fail-if-patched":
+                        _failIfPatched = true;
+                        continue;
+                    case "--restore":
+                        _restoreOnly = true;
+                        continue;
+                    case "-h":
+                    case "--help":
+                        showHelp = true;
+                        continue;
+                }
+
+                if (arg.StartsWith('-') && arg.Length > 1)
+                {
+                    Error($"Unknown option: {arg}");
+                    return false;
+                }
+            }
+
+            if (targetArgument != null)
+            {
+                Error($"Unexpected argument: {arg}");
+                return false;
+            }
+
+            targetArgument = arg;
+        }
+
+        return true;
+    }
+
+    static void PrintUsage(TextWriter writer)
+    {
+        writer.WriteLine("Usage: AtomcraftPatcher [options] [path to Atomcraft.dll]");
+        writer.WriteLine();
+        writer.WriteLine("Patches Atomcraft.dll to load GodotMonoModLoader. With no path given, the");
+        writer.WriteLine("game data folder next to the patcher, then one folder up, is searched.");
+        writer.WriteLine();
+        writer.WriteLine("Options:");
+        writer.WriteLine("  -y, --non-interactive  Never wait for a keypress before exiting.");
+        writer.WriteLine("      --restore          Restore the backup instead of patching.");
+        writer.WriteLine("      --fail-if-patched  Exit 6 instead of 0 when already patched.");
+        writer.WriteLine("      --quiet            Suppress progress output. Errors still go to stderr.");
+        writer.WriteLine("  -h, --help             Show this help.");
+        writer.WriteLine();
+        writer.WriteLine("Exit codes:");
+        writer.WriteLine("  0  Patch applied, or already patched");
+        writer.WriteLine("  1  Unclassified failure");
+        writer.WriteLine("  2  Usage error");
+        writer.WriteLine("  3  Atomcraft.dll or backup not found");
+        writer.WriteLine("  4  ModLoaderPatch.dll missing or unusable");
+        writer.WriteLine("  5  Old patch detected, restore required");
+        writer.WriteLine("  6  Already patched, with --fail-if-patched");
+    }
+
+    static void Info(string message = "")
+    {
+        if (!_quiet)
+        {
+            Console.WriteLine(message);
+        }
+    }
+
+    static void Error(string message = "")
+    {
+        Console.Error.WriteLine(message);
     }
 
     static int Exit(int exitCode, bool restore = false)
     {
         bool canRestore = restore && File.Exists(_targetPath + ".backup");
+
+        if (!IsInteractive)
+        {
+            return exitCode;
+        }
+
         Console.WriteLine();
         Console.WriteLine(canRestore ? "Press ANY key to EXIT or R to restore the backup" : "Press ANY key to EXIT");
         Console.WriteLine();
-        ConsoleKeyInfo key = Console.ReadKey(true);
+
+        ConsoleKeyInfo key;
+        try
+        {
+            key = Console.ReadKey(true);
+        }
+        catch (InvalidOperationException)
+        {
+            // No console input handle after all. Nothing to wait for.
+            return exitCode;
+        }
+
         if (canRestore && key.Key == ConsoleKey.R)
         {
-            RestoreBackup();
-            return Exit(0);
+            return Exit(RestoreBackup());
         }
         return exitCode;
     }
 
-    static void RestoreBackup()
+    static int RestoreBackup()
     {
-        File.Copy(_targetPath + ".backup", _targetPath, overwrite: true);
-        Console.WriteLine("Backup restored.");
+        string backupPath = _targetPath + ".backup";
+
+        if (!File.Exists(backupPath))
+        {
+            Error($"Backup not found: {backupPath}");
+            return ExitTargetNotFound;
+        }
+
+        try
+        {
+            File.Copy(backupPath, _targetPath, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            Error();
+            Error("ERROR:");
+            Error(ex.ToString());
+            return ExitFailure;
+        }
+
+        Info("Backup restored.");
+        return ExitSuccess;
     }
 
     private static void AddTypeToGodotObjectSystem(AssemblyDefinition target, TypeDefinition injectedType)
