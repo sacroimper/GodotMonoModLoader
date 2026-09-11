@@ -5,15 +5,19 @@ var mod_loader
 var mods: Dictionary[String, ModInfo]
 var log_history: Array[String] = []
 
+var start_time
+
 func _initialize():
 
+	start_time = Time.get_ticks_msec()
+	log_separator()
 	load_game()
 	if load_mod_loader():
 		load_mods()
 
-	var mod_loader_report = load("./GodotMonoModLoader/ModLoaderReport.tscn").instantiate()
-	mod_loader_report.initialize(mods, log_history, mod_loader != null)
-	self.root.add_child(mod_loader_report)
+	log_message("Exiting mod loader.")
+	log_separator()
+	
 	
 
 func _finalize():
@@ -63,9 +67,19 @@ func load_game() -> void:
 
 	await process_frame
 	await process_frame
-	log_message("Game loaded")
+	
+	log_message("Game loaded.")
+	log_separator()
+
+	log_message("Loading report...")
+	var mod_loader_report = load("./GodotMonoModLoader/ModLoaderReport.tscn").instantiate()
+	mod_loader_report.initialize(mods, log_history, mod_loader != null)
+	self.root.add_child(mod_loader_report)
 
 func load_mod_loader():
+
+	log_message("Initializing mod loader...")
+	
 	var Patch = load("res://GodotMonoModLoaderPatch/GodotMonoModLoaderPatch.cs")
 	if Patch == null:
 		log_message("The game needs to be patched to be able to load mods.")
@@ -97,9 +111,13 @@ func load_mod_loader():
 		log_message("Error initializing mod loader.")
 		return false
 
+	log_message("Mod loader initialized.")
+	log_separator()
 	return true
 
 func load_mods() -> void:
+
+
 	mods = lookup_mods()
 	var loadable_modules = get_loadable_modules(true)
 	log_message(str("Modules loaded: ", loadable_modules.size()))
@@ -124,7 +142,6 @@ func get_loadable_modules(load_now: bool) -> Array[ModuleInfo]:
 
 	#modules_to_load.sort()
 	log_message(str("Modules to load: ", modules_to_load))
-	log_message("--------------------------------------------------------------------------------")
 	modules_to_load.reverse()
 
 	var doneSomething = true
@@ -144,7 +161,7 @@ func get_loadable_modules(load_now: bool) -> Array[ModuleInfo]:
 				log_message(str("Missing dependency for ", moduleId))
 				doneSomething = true
 				modules_to_load.remove_at(i)
-				log_message("--------------------------------------------------------------------------------")
+				log_separator()
 				continue
 			elif module.dependencies and module.dependencies.any(func (dependencyId): return modules[dependencyId].state != ModuleState.READY and modules[dependencyId].state != ModuleState.LOADED):
 				if module.dependencies.all(func (dependencyId): return modules[dependencyId].state == ModuleState.OPTIONAL or modules[dependencyId].state == ModuleState.READY or modules[dependencyId].state == ModuleState.LOADED):
@@ -174,7 +191,7 @@ func get_loadable_modules(load_now: bool) -> Array[ModuleInfo]:
 					loadable_modules.append(module)
 				doneSomething = true
 				modules_to_load.remove_at(i)
-				log_message("--------------------------------------------------------------------------------")
+				log_separator()
 
 
 		# When no more modules can be loaded due to dependency restrictions, it does an extra iteration to load all modules that were waiting for optionalDependencies
@@ -259,6 +276,8 @@ func load_translations(mod: ModInfo, module: ModuleInfo) -> bool:
 func lookup_mods() -> Dictionary[String, ModInfo]:
 	var mod_list: Dictionary[String, ModInfo] = {}
 
+	log_message("Looking up for mods...")
+	
 	register_bundled_mods(mod_list)
 	read_mods(mod_list, lookup_zips(OS.get_executable_path().get_base_dir().path_join("Mods")))
 	read_mods(mod_list, lookup_zips(OS.get_user_data_dir().path_join("Mods")))
@@ -414,6 +433,12 @@ func lookup_zips(path : String) -> Array[String]:
 				zip_paths.append(path.path_join(file))
 	return zip_paths
 
-func log_message(message: String):
+func log_separator():
+	log_message("--------------------------------------------------------------------------------", true)
+
+func log_message(message: String, use_time = false):
+	if use_time:
+		var elapsed = Time.get_ticks_msec() - start_time
+		message += str(" Time: ", elapsed, " ms")
 	log_history.append(message)
 	print(str("[GodotMonoModLoader]: ", message))
