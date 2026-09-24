@@ -1,10 +1,13 @@
-﻿using Mono.Cecil;
+﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace AtomcraftPatcher;
 
 internal static class Program
 {
+    
     private const int ExitSuccess = 0;
     private const int ExitFailure = 1;
     private const int ExitUsage = 2;
@@ -12,13 +15,19 @@ internal static class Program
     private const int ExitPatchUnusable = 4;
     private const int ExitOldPatch = 5;
     private const int ExitAlreadyPatched = 6;
+    private const int ExitErrorStoppingGame = 7;
+    private const int ExitErrorLaunchingGame = 8;
 
     private static string _targetPath = Path.Combine(AppContext.BaseDirectory, "data_Atomcraft_windows_x86_64", "Atomcraft.dll");
 
+    private static bool _launchGame;
+    private static bool _killGame;
     private static bool _nonInteractive;
     private static bool _quiet;
     private static bool _failIfPatched;
     private static bool _restoreOnly;
+    private static bool _headless;
+    private static List<string>? _extraArgs;
 
     private static bool IsInteractive =>
         !_nonInteractive && !Console.IsInputRedirected && Environment.UserInteractive;
@@ -29,7 +38,7 @@ internal static class Program
         string typeToBeInjected = "Atomcraft.GodotMonoModLoaderPatch";
         string oldType = "Atomcraft.GodotMonoModLoader";
 
-        if (!TryParseArguments(args, out string? targetArgument, out bool showHelp))
+        if (!TryParseArguments(args, out string? targetArgument, out bool showHelp, out int pid))
         {
             PrintUsage(Console.Error);
             return Exit(ExitUsage);
@@ -67,12 +76,41 @@ internal static class Program
 
         Info($"File to patch located: {_targetPath}.");
 
+        if (pid != 0)
+        {
+            try
+            {
+                using Process game = Process.GetProcessById(pid);
+
+                Info($"Found game: {game.ProcessName} ({pid})");
+
+                if (_killGame)
+                {
+                    game.Kill();
+                }
+
+                // Wait until Windows confirms it's actually gone.
+                game.WaitForExit();
+
+                Info("Game terminated.");
+            }
+            catch (ArgumentException)
+            {
+                Info("Game process no longer exists.");
+            }
+            catch (Exception ex)
+            {
+                Error($"Failed to close game: {ex.Message}");
+                Error(ex.ToString());
+                Exit(ExitErrorStoppingGame);
+            }
+        }
+        
         if (_restoreOnly)
         {
             return Exit(RestoreBackup());
         }
 
-        
         string patcherDirectory = AppContext.BaseDirectory;
         string patchPath = Path.Combine(patcherDirectory, "GodotMonoModLoader", "ModLoaderPatch.dll");
         
@@ -122,6 +160,10 @@ internal static class Program
                 {
                     Info($"{typeToBeInjected} class already patched.");
                     target.Dispose(); // Required to be able to restore the target with the backup
+                    if (_launchGame && !_failIfPatched)
+                    {
+                        return LaunchGame();
+                    }
                     return Exit(_failIfPatched ? ExitAlreadyPatched : ExitSuccess, true);
                 }
                 
@@ -167,7 +209,7 @@ internal static class Program
             Info();
             Info("Patch applied.");
             
-            return Exit(ExitSuccess, true);
+            return _launchGame ? LaunchGame() : Exit(ExitSuccess, true);
         }
         catch (Exception ex)
         {
@@ -179,58 +221,112 @@ internal static class Program
         }
     }
 
-    static bool TryParseArguments(string[] args, out string? targetArgument, out bool showHelp)
+    static bool TryParseArguments(string[] args, out string? targetArgument, out bool showHelp, out int restartPid)
     {
         targetArgument = null;
         showHelp = false;
-
-        bool optionsEnded = false;
-
+        restartPid = 0;
+        
         foreach (string arg in args)
         {
-            if (!optionsEnded)
+            
+            if (_extraArgs != null)
             {
-                switch (arg)
-                {
-                    case "--":
-                        optionsEnded = true;
-                        continue;
-                    case "-y":
-                    case "--non-interactive":
-                        _nonInteractive = true;
-                        continue;
-                    case "--quiet":
-                        _quiet = true;
-                        continue;
-                    case "--fail-if-patched":
-                        _failIfPatched = true;
-                        continue;
-                    case "--restore":
-                        _restoreOnly = true;
-                        continue;
-                    case "-h":
-                    case "--help":
-                        showHelp = true;
-                        continue;
-                }
-
-                if (arg.StartsWith('-') && arg.Length > 1)
-                {
-                    Error($"Unknown option: {arg}");
-                    return false;
-                }
+                _extraArgs.Add(arg);
+                continue;
             }
+            
+            ParseArg(arg, out string? argKey, out string? argVal);
 
-            if (targetArgument != null)
+            switch (argKey)
             {
-                Error($"Unexpected argument: {arg}");
+                case "--":
+                    _extraArgs = [];
+                    continue;
+                case "-y":
+                case "--non-interactive":
+                    _nonInteractive = true;
+                    continue;
+                case "--quiet":
+                    _quiet = true;
+                    continue;
+                case "--fail-if-patched":
+                    _failIfPatched = true;
+                    continue;
+                case "--restore":
+                    _restoreOnly = true;
+                    continue;
+                case "-h":
+                case "--help":
+                    showHelp = true;
+                    continue;
+                case "--launch-game":
+                    _launchGame = true;
+                    continue;
+                case "--restart-game":
+                    if (!int.TryParse(argVal, out int pid) || pid <= 0)
+                    {
+                        Error($"Invalid restart PID: {argVal}");
+                        return false;
+                    }
+                    restartPid = pid;
+                    _launchGame = true;
+                    continue;
+                case "--kill-game":
+                    if (argVal != null && restartPid == 0)
+                    {
+                        if (!int.TryParse(argVal, out int pid2) || pid2 <= 0)
+                        {
+                            Error($"Invalid restart PID: {argVal}");
+                            return false;
+                        }
+
+                        restartPid = pid2;
+                    }
+                    _killGame = true;
+                    continue;
+                case "--headless":
+                    _headless = true;
+                    continue;
+                case null:
+                    if (targetArgument != null)
+                    {
+                        Error($"Unexpected argument: {argVal}");
+                        return false;
+                    }
+
+                    targetArgument = argVal;
+                    continue;
+                }
+                
+                Error($"Unknown option: {arg}");
                 return false;
-            }
-
-            targetArgument = arg;
         }
 
         return true;
+    }
+    
+    static void ParseArg(string arg, out string? argKey, out string? argVal)
+    {
+        argKey = null;
+        argVal = null;
+        if (arg.StartsWith('-'))
+        {
+            if (arg.Contains('='))
+            {
+                string[] split = arg.Split('=', 2);
+                argKey = split[0];
+                argVal = split[1];
+            }
+            else
+            {
+                argKey = arg;
+            }
+        }
+        else
+        {
+            argVal = arg;
+        }
     }
 
     static void PrintUsage(TextWriter writer)
@@ -241,11 +337,17 @@ internal static class Program
         writer.WriteLine("game data folder next to the patcher, then one folder up, is searched.");
         writer.WriteLine();
         writer.WriteLine("Options:");
-        writer.WriteLine("  -y, --non-interactive  Never wait for a keypress before exiting.");
-        writer.WriteLine("      --restore          Restore the backup instead of patching.");
-        writer.WriteLine("      --fail-if-patched  Exit 6 instead of 0 when already patched.");
-        writer.WriteLine("      --quiet            Suppress progress output. Errors still go to stderr.");
-        writer.WriteLine("  -h, --help             Show this help.");
+        writer.WriteLine("  -y, --non-interactive     Never wait for a keypress before exiting.");
+        writer.WriteLine("      --restore             Restore the backup instead of patching.");
+        writer.WriteLine("      --fail-if-patched     Exit 6 instead of 0 when already patched.");
+        writer.WriteLine("      --quiet               Suppress progress output. Errors still go to stderr.");
+        writer.WriteLine("      --launch-game         Will launch the game on success, either applying patch or restoring.");
+        writer.WriteLine("      --restart-game=<pid>  Will wait for the pid process to stop, then apply/restore the patch, and then launch the game on success.");
+        writer.WriteLine("      --kill-game=<pid>     Will kill the pid process before applying the patch or restoring the backup.");
+        writer.WriteLine("                            Can be used in combination with --restart-game. In this case the '<pid>' of this argument will be ignored (can be omited).");
+        writer.WriteLine("      --headless            In combination with --launch-game or --restart-game the game will be launched in headless mode.");
+        writer.WriteLine("      --                    End of arguments. In combination with --launch-game or --restart-game, any extra argument will be passed to the game.");
+        writer.WriteLine("  -h, --help                Show this help.");
         writer.WriteLine();
         writer.WriteLine("Exit codes:");
         writer.WriteLine("  0  Patch applied, or already patched");
@@ -255,6 +357,8 @@ internal static class Program
         writer.WriteLine("  4  ModLoaderPatch.dll missing or unusable");
         writer.WriteLine("  5  Old patch detected, restore required");
         writer.WriteLine("  6  Already patched, with --fail-if-patched");
+        writer.WriteLine("  7  Error while waiting for or trying to close the game");
+        writer.WriteLine("  8  Error while launching the game");
     }
 
     static void Info(string message = "")
@@ -272,12 +376,13 @@ internal static class Program
 
     static int Exit(int exitCode, bool restore = false)
     {
-        bool canRestore = restore && File.Exists(_targetPath + ".backup");
 
         if (!IsInteractive)
         {
             return exitCode;
         }
+        
+        bool canRestore = restore && File.Exists(_targetPath + ".backup");
 
         Console.WriteLine();
         Console.WriteLine(canRestore ? "Press ANY key to EXIT or R to restore the backup" : "Press ANY key to EXIT");
@@ -324,6 +429,43 @@ internal static class Program
         }
 
         Info("Backup restored.");
+        
+        if (_launchGame)
+        {
+            return LaunchGame();
+        }
+        
+        return ExitSuccess;
+    }
+
+    static int LaunchGame()
+    {
+        Info("Launching the game.");
+        try
+        {
+            string gameDirectory = Directory.GetParent(Path.GetDirectoryName(_targetPath)!)!.FullName;
+
+            ProcessStartInfo startInfo = new()
+            {
+                FileName = Path.Combine(gameDirectory, "AtomCraft.exe"),
+                WorkingDirectory = gameDirectory,
+                UseShellExecute = false
+            };
+
+            if (_headless) startInfo.ArgumentList.Add("--headless");
+            startInfo.ArgumentList.Add("-s");
+            startInfo.ArgumentList.Add("GodotMonoModLoader.gd");
+            _extraArgs?.ForEach(arg => startInfo.ArgumentList.Add(arg));
+            
+            Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            Error($"Error while trying to launch the game: {ex.Message}");
+            Error(ex.ToString());
+            return ExitErrorLaunchingGame;
+        }
+        
         return ExitSuccess;
     }
 
@@ -455,42 +597,6 @@ internal static class Program
             source.CustomAttributes,
             target,
             targetModule);
-        /*
-    foreach (CustomAttribute attribute in source.CustomAttributes)
-    {
-        var newAttribute = new CustomAttribute(
-            targetModule.ImportReference(attribute.Constructor));
-
-        foreach (var argument in attribute.ConstructorArguments)
-        {
-            newAttribute.ConstructorArguments.Add(
-                ImportCustomAttributeArgument(
-                    argument,
-                    targetModule));
-        }
-
-        foreach (var field in attribute.Fields)
-        {
-            newAttribute.Fields.Add(
-                new CustomAttributeNamedArgument(
-                    field.Name,
-                    ImportCustomAttributeArgument(
-                        field.Argument,
-                        targetModule)));
-        }
-
-        foreach (var property in attribute.Properties)
-        {
-            newAttribute.Properties.Add(
-                new CustomAttributeNamedArgument(
-                    property.Name,
-                    ImportCustomAttributeArgument(
-                        property.Argument,
-                        targetModule)));
-        }
-
-        target.CustomAttributes.Add(newAttribute);
-    }*/
         
         foreach (GenericParameter gp in source.GenericParameters)
         {

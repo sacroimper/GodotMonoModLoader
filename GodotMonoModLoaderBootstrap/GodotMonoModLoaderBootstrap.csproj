@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Nullable>enable</Nullable>
+    <AssemblyName>GodotMonoModLoaderBootstrap</AssemblyName>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+<!--  <ItemGroup>-->
+<!--    <None Include="GodotMonoModLoaderBootstrap.runtimeconfig.json"-->
+<!--          CopyToOutputDirectory="PreserveNewest"-->
+<!--          CopyToPublishDirectory="PreserveNewest" />-->
+<!--  </ItemGroup>-->
+  
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DebugSymbols>False</DebugSymbols>
+    <DebugType>None</DebugType>
+  </PropertyGroup>
+
+<!--  <Target Name="CopyBootstrapAfterPublish" AfterTargets="Publish">-->
+<!--    <MakeDir Directories="$(MSBuildProjectDirectory)\..\Release\GodotMonoModLoader" />-->
+<!--    <Copy-->
+<!--      SourceFiles="$(PublishDir)$(AssemblyName).dll;$(PublishDir)GodotMonoModLoaderBootstrap.runtimeconfig.json"-->
+<!--      DestinationFolder="$(MSBuildProjectDirectory)\..\Release\GodotMonoModLoader"-->
+<!--      SkipUnchangedFiles="true" />-->
+<!--  </Target>-->
+
+  <Target Name="RemoveDepsJson" AfterTargets="Publish">
+    <Delete Files="$(PublishDir)$(AssemblyName).deps.json" />
+  </Target>
+  
+</Project>

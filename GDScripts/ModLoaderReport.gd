@@ -49,6 +49,8 @@ func _ready():
 
 	_populate()
 
+	logLabel.append_text("Report loaded." + "\n")
+
 
 func _populate():
 
@@ -56,15 +58,15 @@ func _populate():
 
 	for line in history:
 		logLabel.append_text(line + "\n")
-
+	
 	summary.clear()
 	errors.clear()
 
 	if !mod_loader_initialized:
 		tabs.current_tab = 0
 		tabs.set_tab_hidden(1, true)
-		errors.append_text("[color=red][font_size=30]Error initiating the Mod Loader.\nMake sure all files from GodotMonoModLoader.zip had been extracted and the game is patched.[/font_size][/color]\n")
-		errors.append_text("\n[color=yellow][font_size=30]Probably the game has been updated and needs to be patched again.[/font_size][/color]\n")
+		errors.append_text("[color=red][font_size=30]\nError starting the Mod Loader.\nMods could not be loaded.\n\n[/font_size][/color]")
+		errors.append_text("[color=yellow][font_size=30]Make sure all the contents from GodotMonoModLoader.zip had been extracted next to AtomCraft.exe, keeping the same structure.[/font_size][/color]")
 		return
 
 	var mods_total := 0
@@ -95,9 +97,9 @@ func _populate():
 						"Mod: %s Module: %s\n" % [mod.name, module.moduleId]
 					)
 					errors.append_text(
-						"[color=red]Error: %s[/color]\n\n" % module.error_message
+						"[color=red]Error: %s[/color]\n\n" % module.errorMessage
 					)
-					module_error = false
+					module_error = true
 
 				ModuleState.OPTIONAL:
 					optional += 1
@@ -189,7 +191,7 @@ func _on_mod_selected(mod_id: String) -> void:
 			])
 
 			if module.state == ModuleState.ERROR:
-				mod_details.append_text("    [color=red]%s[/color]\n" % module.error_message)
+				mod_details.append_text("    [color=red]%s[/color]\n" % module.errorMessage)
 		
 	
 	mod_details.append_text("\n[b]Location:[/b] %s\n" % mod.path)
