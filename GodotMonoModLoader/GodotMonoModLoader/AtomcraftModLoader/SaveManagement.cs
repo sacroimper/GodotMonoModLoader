@@ -79,7 +79,7 @@ public static class SaveManagement
 
             LoadModdedMaterials(universe);
 
-            foreach (ModuleInfo module in GMML.GetLoadedModules)
+            foreach (ModuleInfo module in GMML.LoadedModules)
             {
                 ModOnUniverseLoad(module, universe, _moddedUniverse?.ModsData.GetValueOrDefault(module.ModuleId));
             }
@@ -104,7 +104,7 @@ public static class SaveManagement
             SaveModdedMaterials(universe);
 
             
-            foreach (ModuleInfo module in GMML.GetLoadedModules)
+            foreach (ModuleInfo module in GMML.LoadedModules)
             {
                 if (ModOnUniverseSave(module, universe, out JToken? modData))
                 {
@@ -222,14 +222,21 @@ public static class SaveManagement
 
     private static void SaveModdedMaterials(SaveData_Universe universe)
     {
-        if (AtomcraftModLoader.Instance.MaterialsToAdd.Count > 0)
+        if (AtomcraftModLoader.Instance.MaterialsAdded > 0)
         {
             SaveData_World world = universe.World;
 
-            List<short> materialIdsToSave =
-                AtomcraftModLoader.Instance.MaterialsToAdd.ConvertAll(material => material.Name.ToMaterialTypeId());
-            List<string> materialNamesToSave =
-                AtomcraftModLoader.Instance.MaterialsToAdd.ConvertAll(material => material.Name);
+            List<short> materialIdsToSave = [];
+            List<string> materialNamesToSave = [];
+
+            foreach (ModuleInfo module in GMML.LoadedModules)
+            {
+                if (module.ModEntry is AtomcraftModEntry modEntry)
+                {
+                    materialIdsToSave.AddRange(modEntry.MaterialsToAdd.Select(material => material.Name.ToMaterialTypeId()));
+                    materialNamesToSave.AddRange(modEntry.MaterialsToAdd.Select(material => material.Name));
+                }
+            }
 
             if (world.Players != null)
             {

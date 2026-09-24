@@ -113,6 +113,16 @@ public partial class ModLoaderReport : CanvasLayer
                         moduleLoaded = true;
                         break;
 
+                    case ModuleState.PartialError:
+                        failed += 1;
+
+                        _errors.AppendText($"Mod: {mod.Name} Module: {module.ModuleId}\n");
+                        _errors.AppendText($"[color=yellow]This mod has been partially loaded with errors: {module.ErrorMessage}[/color]\n\n");
+                        
+                        moduleLoaded = true;
+                        moduleError = true;
+                        break;
+                    
                     case ModuleState.Error:
                         failed += 1;
 
@@ -208,12 +218,16 @@ public partial class ModLoaderReport : CanvasLayer
                         status = "[color=lime]✓ Loaded[/color]";
                         break;
 
+                    case ModuleState.PartialError:
+                        status = "[color=yellow]✗ Error[/color]";
+                        break;
+
                     case ModuleState.Error:
                         status = "[color=red]✗ Error[/color]";
                         break;
 
                     case ModuleState.Optional:
-                        status = "[color=yellow]○ Optional[/color]";
+                        status = "[color=grey]○ Optional[/color]";
                         break;
 
                     case ModuleState.Ready:
@@ -227,7 +241,7 @@ public partial class ModLoaderReport : CanvasLayer
 
                 _modDetails.AppendText($"• {module.ModuleId} — {status}\n");
 
-                if (module.State == ModuleState.Error)
+                if (module.ErrorMessage != null)
                 {
                     _modDetails.AppendText($"    [color=red]{module.ErrorMessage}[/color]\n");
                 }

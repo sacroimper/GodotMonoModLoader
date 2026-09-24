@@ -9,7 +9,7 @@ These are the steps to launch the game with mods:
 1. Download the GodotMonoModLoader.zip from Release ([Download](https://github.com/sacroimper/GodotMonoModLoader/raw/refs/heads/main/Release/GodotMonoModLoader.zip)).
 2. Extract all contents into the game installation folder (next to Atomcraft.exe) without creating extra folders.
 3. Install the mods as a Zip (don't extract) into `%AppData%/Godot/app_userdata/Atomcraft/Mods`, or the corresponding folder on Linux. (Alternatively, mods can also be installed in a Mods folder inside the game installation folder).
-4. Execute the game with the launch parameter ` -s GodotMonoModLoader.gd`. This can be configured in Steam > Right-click the game in the library > Properties > General tab > Launch Options.
+4. Execute the game with the launch parameter `-s GodotMonoModLoader.gd`. This can be configured in Steam > Right-click the game in the library > Properties > General tab > Launch Options.
 
 The mod loader will automatically patch and restart the game when launching if needed, but only if the main entry point fails or takes too long. It can also be manually patched or restored using the AtomcraftPatcher.exe included in the zip.
 
@@ -49,6 +49,7 @@ To make a mod that loads with this Mod Loader:
   "description": "<Description>",
   "author": "<author>",
   "version": "<version>",
+  "apiVersion": "<version of the mod loader required>",
   "modules": [
     {
       "moduleId": "<ModId/ModuleId>",
@@ -89,20 +90,24 @@ To make a mod that loads with this Mod Loader:
 ```
 - If `entryClass` is defined it will be used as the Mod Entry type:
 
-  - **If the type doesn't implement AtomcraftModEntry (Legacy mode):**<br/>Once the library is loaded, a **public static** method named ``Initialize`` will be called.
+  - **If the type doesn't implement AtomcraftModEntry (Legacy mode):**<br/>Once the library is loaded, a **public static** method named `Initialize` will be called.
     Additionally, **public static** methods `OnUniverseLoad` and `OnUniverseSave` will also be called before loading and saving a world. A Serializable object can be received/returned on these methods to save data into the world file (it will be stored in a file <saveDir>/<world_name>.moddedUniverse).
 
   - **If the type implements AtomcraftModEntry:** An instance will be created after loading the library. Additionally:
-    - This type can implement IModInitializationProvider to be called after loading the library. A custom serializable type can be defined with the interface to be used as the Mod Config (Ex: `IModInitializationProvider<MyModConfig>`).
-    - This type can implement IUniverseLoadSaveProvider to be called after loading and before saving a save. A custom serializable type can be defined with the interface to be used as the save data (Ex: `IUniverseLoadSaveProvider<MySaveData>`).
+    - This type can implement `IModInitializationProvider` to be called after loading the library. A custom serializable type can be defined with the interface to be used as the Mod Config (Ex: `IModInitializationProvider<MyModConfig>`).
+    - This type can implement `IUniverseLoadSaveProvider` to be called after loading and before saving a save. A custom serializable type can be defined with the interface to be used as the save data (Ex: `IUniverseLoadSaveProvider<MySaveData>`).
+    - This type can override `OnMaterialsLoad` to dynamically create materials.
+    - This type can override `PostMaterialsLoad` to apply "after-load" modifications to materials, like assign custom material classes (using `Materials.AddBaseMaterial()`).
+    - This type can override `PostCraftablesInit` to define craftable materials.
+    - This type can override `OnReactionsLoad` to dynamically create reactions.
 
 ## Running mods on the extracted game when launching from Godot
 
 Follow this steps to be able to load mods when launching the game from Godot:
 
-- Add the file ``GodotMonoModLoaderPatch.cs`` from the ``ModLoaderPatch`` project into the Godot project folder (any place where there are ``.cs`` files). 
-- Add ``GodotMonoModLoader.gd`` from the download zip into the Godot project folder (preferably at the root).
-- Go to ``Project > Project Settings > General (tab) > Editor > Run`` and set ``-s path/to/GodotMonoModLoader.gd`` into the property ``Main Run Args``.
+- Add the file `GodotMonoModLoaderPatch.cs` from the `ModLoaderPatch` project into the Godot project folder (any place where there are `.cs` files). 
+- Add `GodotMonoModLoader.gd` from the download zip into the Godot project folder (preferably at the root).
+- Go to `Project > Project Settings > General (tab) > Editor > Run` and set `-s path/to/GodotMonoModLoader.gd` into the property `Main Run Args`.
 
 Now the game will launch with the mod loader.
 

@@ -32,6 +32,11 @@ public partial class ModLoaderLogger : RefCounted
         return message + " Time: " + elapsed + " ms";
     }
 
+    public void LogError(Exception e)
+    {
+        LogError(false,  e.ToString());
+    }
+    
     public void LogError(string message)
     {
         LogError(false,  message);

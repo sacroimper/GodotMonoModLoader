@@ -3,15 +3,16 @@ using Atomcraft;
 using Godot;
 using HarmonyLib;
 using Newtonsoft.Json;
+using Console = System.Console;
 
 namespace GodotMonoModLoader.Atomcraft;
 
 public class AtomcraftModLoader
 {
-    public static AtomcraftModLoader Instance { get; private set; } = null!;
+    internal static AtomcraftModLoader Instance { get; private set; } = null!;
 
-    internal readonly List<Serializable_MaterialType> MaterialsToAdd = [];
-    internal readonly List<ReactionType> ReactionsToAdd = [];
+    internal int MaterialsAdded;
+    internal int ReactionsAdded;
     
     internal GodotMonoModLoader ModLoader { get; private set; } = null!;
     internal ModLoaderLogger Logger { get; private set; } = null!;
@@ -63,12 +64,11 @@ public class AtomcraftModLoader
         {
             string zipPath = mod.Path;
             string path = mod.Id.PathJoin(module.Materials);
-            
             using ZipReader reader = new();
             reader.Open(zipPath);
             if (path.EndsWith(".json"))
             {
-                LoadMaterials(reader, path);
+                module.MaterialsToAdd.AddRange(LoadMaterials(reader, path));
             }
             else
             {
@@ -77,10 +77,11 @@ public class AtomcraftModLoader
                 {
                     if (entry.StartsWith(path) && entry.EndsWith(".json"))
                     {
-                        LoadMaterials(reader, entry);
+                        module.MaterialsToAdd.AddRange(LoadMaterials(reader, entry));
                     }
                 }
             }
+            
         }
         catch (Exception e)
         {
@@ -93,7 +94,7 @@ public class AtomcraftModLoader
         return true;
     }
 
-    public void LoadMaterials(ZipReader reader, string file)
+    public List<Serializable_MaterialType> LoadMaterials(ZipReader reader, string file)
     {
         Logger.LogMessage("Loading materials file: " + file);
         
@@ -101,7 +102,7 @@ public class AtomcraftModLoader
         {
             string fileAsText = System.Text.Encoding.UTF8.GetString(reader.ReadFile(file));
             
-            MaterialsToAdd.AddRange(JsonConvert.DeserializeObject<List<Serializable_MaterialType>>(fileAsText)!);
+            return JsonConvert.DeserializeObject<List<Serializable_MaterialType>>(fileAsText)!;
         }
         catch (Exception)
         {
@@ -122,7 +123,7 @@ public class AtomcraftModLoader
             reader.Open(zipPath);
             if (path.EndsWith(".json"))
             {
-                LoadReactions(reader, path);
+                module.ReactionsToAdd.AddRange(LoadReactions(reader, path));
             }
             else
             {
@@ -131,7 +132,7 @@ public class AtomcraftModLoader
                 {
                     if (entry.StartsWith(path) && entry.EndsWith(".json"))
                     {
-                        LoadReactions(reader, entry);
+                        module.ReactionsToAdd.AddRange(LoadReactions(reader, entry));
                     }
                 }
             }
@@ -147,7 +148,7 @@ public class AtomcraftModLoader
         return true;
     }
 
-    public void LoadReactions(ZipReader reader, string file)
+    public List<ReactionType> LoadReactions(ZipReader reader, string file)
     {
         Logger.LogMessage("Loading reactions file: " + file);
         
@@ -155,7 +156,7 @@ public class AtomcraftModLoader
         {
             string fileAsText = System.Text.Encoding.UTF8.GetString(reader.ReadFile(file));
             
-            ReactionsToAdd.AddRange(JsonConvert.DeserializeObject<List<ReactionType>>(fileAsText)!);
+            return JsonConvert.DeserializeObject<List<ReactionType>>(fileAsText)!;
         }
         catch (Exception)
         {
@@ -243,13 +244,36 @@ public class AtomcraftModLoader
         public static void MaterialsPostfix()
         {
             Instance.Logger.LogMessage("Loading modded materials...");
-            foreach (Serializable_MaterialType item in Instance.MaterialsToAdd)
-            {
-                MaterialType materialType = new MaterialType(item);
-                Materials.AddMaterialType(materialType, overwrite: true);
-            }
             
-            Instance.Logger.LogMessage(Instance.MaterialsToAdd.Count + " modded materials loaded.");
+            foreach (ModuleInfo module in GMML.LoadedModules)
+            {
+                try
+                {
+
+                    if (module.ModEntry is AtomcraftModEntry modEntry)
+                    {
+                        modEntry.OnMaterialsLoad(new MaterialsLoadContext(modEntry.MaterialsToAdd));
+                    }
+                    
+                    foreach (Serializable_MaterialType material in module.MaterialsToAdd)
+                    {
+                        MaterialType materialType = new MaterialType(material);
+                        Materials.AddMaterialType(materialType, overwrite: true);
+                        Instance.MaterialsAdded++;
+                    }
+                }
+                catch (Exception e)
+                {
+                    module.ErrorMessage += "\nError while trying to load materials.";
+                    module.State = ModuleState.PartialError;
+                    Instance.Logger.LogError("Error loading materials from module: " + module.ModuleId);
+                    Instance.Logger.LogError(e);
+                    throw;
+                }
+
+            }
+
+            Instance.Logger.LogMessage(Instance.MaterialsAdded + " modded materials loaded.");
         }
 
         [HarmonyPostfix]
@@ -257,28 +281,110 @@ public class AtomcraftModLoader
         public static void ReactionsPostfix()
         {
             Instance.Logger.LogMessage("Loading modded reactions...");
-            List<BaseMaterial> list = new List<BaseMaterial>();
-            foreach (ReactionType item in Instance.ReactionsToAdd)
+            
+            foreach (ModuleInfo module in GMML.LoadedModules)
             {
-                ReactionTypes.Add(item, overwrite: true);
-                Reaction reaction = Reactions.Add(item, overwrite: true);
-                BaseMaterial baseMaterial = item.PrimaryInput.ToMaterial();
-                if (baseMaterial == null)
+                try
                 {
-                    Instance.Logger.LogError("Material not found: " + item.PrimaryInput);
-                    continue;
+
+                    if (module.ModEntry is AtomcraftModEntry modEntry)
+                    {
+                        modEntry.OnReactionsLoad(new ReactionsLoadContext(modEntry.ReactionsToAdd));
+                    }
+
+                    List<BaseMaterial> baseMaterials = [];
+                    foreach (ReactionType reactionType in module.ReactionsToAdd)
+                    {
+                        ReactionTypes.Add(reactionType, overwrite: true);
+                        Reaction reaction = Reactions.Add(reactionType, overwrite: true);
+                        BaseMaterial baseMaterial = reactionType.PrimaryInput.ToMaterial();
+                        if (baseMaterial == null)
+                        {
+                            Instance.Logger.LogError("Material not found: " + reactionType.PrimaryInput);
+                            module.ErrorMessage += "\nMaterial not found: " + reactionType.PrimaryInput;
+                            module.State = ModuleState.PartialError;
+                            continue;
+                        }
+
+                        baseMaterial.AddReaction(reaction);
+                        baseMaterials.Add(baseMaterial);
+                        Instance.ReactionsAdded++;
+                    }
+
+                    foreach (BaseMaterial baseMaterial in baseMaterials)
+                    {
+                        baseMaterial.ConvertReactionList();
+                    }
                 }
-
-                baseMaterial.AddReaction(reaction);
-                list.Add(baseMaterial);
+                catch (Exception e)
+                {
+                    module.ErrorMessage += "\nError while trying to load reactions.";
+                    module.State = ModuleState.PartialError;
+                    Instance.Logger.LogError("Error loading reactions from module: " + module.ModuleId);
+                    Instance.Logger.LogError(e);
+                }
             }
 
-            foreach (BaseMaterial item2 in list)
+            Instance.Logger.LogMessage(Instance.ReactionsAdded + " modded reactions loaded.");
+        }
+    }
+    
+    [HarmonyPatch(typeof(Materials), "InitializeCustomClasses")]
+    public class MaterialsPatch
+    {
+        public static void Postfix()
+        {
+            
+            foreach (ModuleInfo module in GMML.LoadedModules)
             {
-                item2?.ConvertReactionList();
+                try
+                {
+                    if (module.ModEntry is AtomcraftModEntry modEntry)
+                    {
+                        modEntry.PostMaterialsLoad(new MaterialsLoadContext(modEntry.MaterialsToAdd));
+                    }
+                }
+                catch (Exception e)
+                {
+                    module.ErrorMessage += "\nError while trying to apply modifications to materials.";
+                    module.State = ModuleState.PartialError;
+                    Instance.Logger.LogError("Error applying modifications to materials for module: " + module.ModuleId);
+                    Instance.Logger.LogError(e);
+                }
             }
-
-            Instance.Logger.LogMessage(Instance.ReactionsToAdd.Count + " modded reactions loaded.");
+        }
+    }
+    
+    [HarmonyPatch(typeof(Craftables), nameof(Craftables.Init))]
+    public class CraftablesPatch
+    {
+        public static void Postfix()
+        {
+            
+            foreach (ModuleInfo module in GMML.LoadedModules)
+            {
+                try
+                {
+                    if (module.ModEntry is not AtomcraftModEntry modEntry) continue;
+                    
+                    List<AMLCraftable> craftables = modEntry.PostCraftablesInit();
+                    
+                    foreach (AMLCraftable craftable in craftables ?? [])
+                    {
+                        Craftables.Add(craftable.MaterialTypeName, craftable.Inputs, craftable.VideoStream, craftable.LocIdDescription);
+                        Craftables.GetCategory(craftable.Category).MaterialTypeIds
+                            .Add(craftable.MaterialTypeName.ToMaterialTypeId());
+                    }
+                }
+                catch (Exception e)
+                {
+                    module.ErrorMessage += "\nError while defining craftables.";
+                    module.State = ModuleState.PartialError;
+                    Instance.Logger.LogError("Error defining craftables for module: " + module.ModuleId);
+                    Instance.Logger.LogError(e);
+                    throw;
+                }
+            }
         }
     }
 }

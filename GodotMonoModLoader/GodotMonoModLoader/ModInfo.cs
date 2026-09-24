@@ -50,6 +50,15 @@ public partial class ModInfo : RefCounted
         internal set => ParsedVersion = new Version(value);
     }
     
+    [JsonIgnore]
+    public Version ParsedAPIVersion { get; internal set; } = new (0, 3, 0);
+    
+    [JsonProperty(nameof(APIVersion))]
+    public string APIVersion { 
+        get => ParsedAPIVersion.ToString();
+        internal set => ParsedAPIVersion = new Version(value);
+    }
+    
     [JsonConverter(typeof(ModuleDictionaryConverter))]
     [JsonProperty(nameof(Modules))]
     public Dictionary<string, ModuleInfo> Modules { get; internal set; } = [];

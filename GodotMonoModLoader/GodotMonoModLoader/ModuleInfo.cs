@@ -1,3 +1,4 @@
+using Atomcraft;
 using Godot;
 using Newtonsoft.Json;
 
@@ -55,7 +56,13 @@ public partial class ModuleInfo : RefCounted
     [JsonIgnore]
     public GMMLModEntry? ModEntry { get; internal set; }
 
+    [JsonIgnore]
     public string UniqueId => Mod.Author + "." + ModuleId;
+
+    [JsonIgnore]
+    internal readonly List<Serializable_MaterialType> MaterialsToAdd = [];
+    [JsonIgnore]
+    internal readonly List<ReactionType> ReactionsToAdd = [];
     
     public override string ToString()
     {

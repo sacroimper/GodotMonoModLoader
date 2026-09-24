@@ -20,7 +20,7 @@ public static class GMML
     /**
      * Loaded modules by load order.
      */
-    public static List<ModuleInfo> GetLoadedModules => GodotMonoModLoader.Instance.LoadedModules;
+    public static List<ModuleInfo> LoadedModules => GodotMonoModLoader.Instance.LoadedModules;
 
     
     /**
