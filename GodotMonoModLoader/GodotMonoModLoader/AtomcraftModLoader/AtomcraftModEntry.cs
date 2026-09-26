@@ -5,8 +5,6 @@ namespace GodotMonoModLoader.Atomcraft;
 
 public abstract class AtomcraftModEntry : GMMLModEntry
 {
-    internal readonly List<Serializable_MaterialType> MaterialsToAdd = [];
-    internal readonly List<ReactionType> ReactionsToAdd = [];
 
     /**
      * <summary>Initializes Harmony using ModuleInfo.UniqueId as Harmony's ID.</summary>
@@ -61,5 +59,13 @@ public abstract class AtomcraftModEntry : GMMLModEntry
      *
      */
     public virtual void OnReactionsLoad(ReactionsLoadContext context) { }
+    
+    /**
+     * <summary>Called after the Init method of Simulation has finished.<br/>
+     * Perfect to place the initialization code that requires the game to be fully loaded.</summary>
+     *
+     */
+    public virtual void PostSimulationInit() { }
+    
 
 }

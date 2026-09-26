@@ -1,10 +1,8 @@
-using System.Reflection;
 using Atomcraft;
 using Godot;
 using HarmonyLib;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Console = System.Console;
 using FileAccess = Godot.FileAccess;
 
 namespace GodotMonoModLoader.Atomcraft;
@@ -79,10 +77,12 @@ public static class SaveManagement
 
             LoadModdedMaterials(universe);
 
-            foreach (ModuleInfo module in GMML.LoadedModules)
-            {
-                ModOnUniverseLoad(module, universe, _moddedUniverse?.ModsData.GetValueOrDefault(module.ModuleId));
-            }
+            GMMLUtils.ExecuteForEachModEntry<IUniverseLoadSaveProvider>(modEntry =>
+                {
+                    modEntry.OnUniverseLoad(universe, _moddedUniverse?.ModsData.GetValueOrDefault(modEntry.ModuleInfo.ModuleId));
+                },
+                GMMLUtils.GenericOnError("Error during mod OnUniverseLoad for module: "));
+            
             
             GD.Print("[GodotMonoModLoader] Modded universe loaded.");
         }
@@ -103,17 +103,18 @@ public static class SaveManagement
                 
             SaveModdedMaterials(universe);
 
-            
-            foreach (ModuleInfo module in GMML.LoadedModules)
-            {
-                if (ModOnUniverseSave(module, universe, out JToken? modData))
+            GMMLUtils.ExecuteForEachModEntry<IUniverseLoadSaveProvider>(modEntry =>
                 {
-                    SaveData_ModdedUniverse moddedUniverse = GetOrCreateModdedUniverse(worldName);
+                    JToken? modData = modEntry.OnUniverseSave(universe);
+                    if (modData != null)
+                    {
+                        SaveData_ModdedUniverse moddedUniverse = GetOrCreateModdedUniverse(worldName);
 
-                    moddedUniverse.ModsData[module.ModuleId] = modData;
-                }
-
-            }
+                        moddedUniverse.ModsData[modEntry.ModuleInfo.ModuleId] = modData;
+                    }
+                },
+                GMMLUtils.GenericOnError("Error during mod OnUniverseSave for module: "));
+            
 
             if (_moddedUniverse != null)
             {
@@ -128,39 +129,6 @@ public static class SaveManagement
             GD.PrintErr("[GodotMonoModLoader] Error while saving modded world: ", e.Message);
             GD.PrintErr(e);
         }
-    }
-    
-    public static void ModOnUniverseLoad(ModuleInfo module, SaveData_Universe universe, JToken? modData)
-    {
-        try
-        {
-            if (module.ModEntry is IUniverseLoadSaveProvider modEntry)
-            {
-                modEntry.OnUniverseLoad(universe, modData);
-            }
-        }
-        catch (Exception e)
-        {
-            GD.PrintErr("[GodotMonoModLoader] Error during mod OnUniverseLoad", e);
-        }
-    }
-
-    public static bool ModOnUniverseSave(ModuleInfo module, SaveData_Universe universe, out JToken? modData)
-    {
-        modData = null;
-        try
-        {
-            if (module.ModEntry is IUniverseLoadSaveProvider modEntry)
-            {
-                modData = modEntry.OnUniverseSave(universe);
-            }
-        }
-        catch (Exception e)
-        {
-            GD.PrintErr("[GodotMonoModLoader] Error during mod OnUniverseSave", e);
-        }
-
-        return modData != null;
     }
 
     private static void LoadModdedMaterials(SaveData_Universe universe)
@@ -231,11 +199,8 @@ public static class SaveManagement
 
             foreach (ModuleInfo module in GMML.LoadedModules)
             {
-                if (module.ModEntry is AtomcraftModEntry modEntry)
-                {
-                    materialIdsToSave.AddRange(modEntry.MaterialsToAdd.Select(material => material.Name.ToMaterialTypeId()));
-                    materialNamesToSave.AddRange(modEntry.MaterialsToAdd.Select(material => material.Name));
-                }
+                materialIdsToSave.AddRange(module.MaterialsToAdd.Select(material => material.Name.ToMaterialTypeId()));
+                materialNamesToSave.AddRange(module.MaterialsToAdd.Select(material => material.Name));
             }
 
             if (world.Players != null)

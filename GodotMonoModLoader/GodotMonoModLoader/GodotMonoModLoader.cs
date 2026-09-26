@@ -174,29 +174,11 @@ public partial class GodotMonoModLoader : RefCounted
 		else
 		{
 			modEntry = new StaticModEntry(modEntryType);
-			// MethodInfo? initializeMethod = modEntryType.GetMethod(
-			// 	"Initialize",
-			// 	BindingFlags.Public |
-			// 	BindingFlags.Static
-			// );
-			//
-			// if (initializeMethod == null)
-			// {
-			// 	throw new Exception($"Public Static method {entryClass}.Initialize() not found");
-			// }
-			//
-			// initializeMethod.Invoke(null, null);
 		}
 
 		return modEntry;
 	}
 
-	public JToken? ReadModConfig(ModuleInfo module)
-	{
-		
-		return null;
-	}
-	
 	public Godot.Collections.Dictionary<string, ModInfo> LoadMods()
 	{
 		try

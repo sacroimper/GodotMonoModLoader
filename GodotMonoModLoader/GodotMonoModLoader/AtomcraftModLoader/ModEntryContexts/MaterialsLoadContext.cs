@@ -7,7 +7,7 @@ public class MaterialsLoadContext : ModEntryContext
     /**
      * All the materials read from the mod files. Not yet loaded into the game. More materials can be added to this list to be loaded.
      */
-    public List<Serializable_MaterialType> ModMaterials;
+    public List<Serializable_MaterialType> ModMaterials { get; }
     /**
      * All the materials the game has already loaded.
      */

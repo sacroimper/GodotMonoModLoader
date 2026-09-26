@@ -6,7 +6,7 @@ namespace GodotMonoModLoader;
  * <summary>Implemented by ModEntry classes that want to be called during mod initialization</summary>
  *
  */
-public interface IModInitializationProvider
+public interface IModInitializationProvider : IModEntry
 {
     internal InitializationContext Initialize(JToken? modConfig)
     {

@@ -1,7 +1,7 @@
 
 namespace GodotMonoModLoader;
 
-public abstract class GMMLModEntry
+public abstract class GMMLModEntry : IModEntry
 {
     public ModInfo ModInfo { get; internal set; } = null!;
     public ModuleInfo ModuleInfo { get; internal set; } = null!;
@@ -12,4 +12,5 @@ public abstract class GMMLModEntry
         ModuleInfo = moduleInfo;
         return this;
     }
+
 }

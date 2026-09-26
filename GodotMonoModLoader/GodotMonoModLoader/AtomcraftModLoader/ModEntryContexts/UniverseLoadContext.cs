@@ -6,7 +6,7 @@ namespace GodotMonoModLoader.Atomcraft;
 
 public class UniverseLoadContext : ModEntryContext
 {
-    public readonly SaveData_Universe Universe;
+    public SaveData_Universe Universe { get; }
     public SaveData_World World => Universe.World;
     protected object? _modData;
     
