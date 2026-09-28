@@ -2,7 +2,7 @@ using Atomcraft;
 using Newtonsoft.Json.Linq;
 
 namespace GodotMonoModLoader.Atomcraft;
-public interface IUniverseLoadSaveProvider : IModEntry
+public interface IUniverseLoadSaveProvider : IHook
 {
     
     /**

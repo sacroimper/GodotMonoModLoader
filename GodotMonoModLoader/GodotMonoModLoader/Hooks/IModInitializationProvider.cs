@@ -6,13 +6,19 @@ namespace GodotMonoModLoader;
  * <summary>Implemented by ModEntry classes that want to be called during mod initialization</summary>
  *
  */
-public interface IModInitializationProvider : IModEntry
+public interface IModInitializationProvider : IHook
 {
     internal InitializationContext Initialize(JToken? modConfig)
     {
         InitializationContext context = new();
         Initialize(context);
         return context;
+    }
+    
+    
+    internal InitializationContext Initialize(IModConfig? modConfig)
+    {
+        return Initialize((JToken?) null);
     }
     
     /**
@@ -48,6 +54,13 @@ public interface IModInitializationProvider<T> : IModInitializationProvider
     }
     
     InitializationContext IModInitializationProvider.Initialize(JToken? modConfig)
+    {
+        InitializationContext context = new InitializationContext<T>(modConfig);
+        Initialize(context);
+        return context;
+    }
+    
+    InitializationContext IModInitializationProvider.Initialize(IModConfig? modConfig)
     {
         InitializationContext context = new InitializationContext<T>(modConfig);
         Initialize(context);

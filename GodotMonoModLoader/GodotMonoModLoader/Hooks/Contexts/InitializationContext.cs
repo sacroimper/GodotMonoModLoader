@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 namespace GodotMonoModLoader;
 
 [EditorBrowsable(EditorBrowsableState.Never)]
-public class InitializationContext : ModEntryContext
+public class InitializationContext : HookContext
 {
     
     internal IModConfig? _modConfig;
@@ -25,7 +25,6 @@ public class InitializationContext<T> : InitializationContext
     public T ModConfig { get => (T)_modConfig!; set => _modConfig = value; }
 
     public InitializationContext(JToken? modConfig) : base(GMML.ParseModConfig<T>(modConfig)) {}
+    public InitializationContext(IModConfig? modConfig) : base(modConfig) {}
 
-    
-    
 }

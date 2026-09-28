@@ -1,6 +1,8 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Godot;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -16,12 +18,11 @@ public static class GMML
      * All mods found by the mod loader.
      */
     public static Dictionary<string, ModInfo> GetMods => GodotMonoModLoader.Instance.Mods;
-    
+
     /**
      * Loaded modules by load order.
      */
-    public static List<ModuleInfo> LoadedModules => GodotMonoModLoader.Instance.LoadedModules;
-
+    public static List<ModuleInfo> LoadedModules => [.. GodotMonoModLoader.Instance.LoadedModulesIds.Select(moduleId => GodotMonoModLoader.Instance.LoadedModules[moduleId])];
     
     /**
      * <summary>Reloads the mod config object from disk for the current module (detected by caller's assembly).</summary>
@@ -73,7 +74,6 @@ public static class GMML
         return GetModConfig<T>(GetExecutingModule().ModuleId);
     }
     
-    
     /**
      * <summary>Gets the mod config object from the corresponding module.</summary>
      *
@@ -84,7 +84,7 @@ public static class GMML
     public static T? GetModConfig<T>(string moduleId)
         where T : IModConfig
     {
-        return (T?) GodotMonoModLoader.Instance.ModsConfig[moduleId];
+        return (T?) GodotMonoModLoader.Instance.ModsConfig.GetValueOrDefault(moduleId);
     }
 
     /**
@@ -132,24 +132,24 @@ public static class GMML
     
     public static ModuleInfo ToModuleInfo(this string moduleId)
     {
-        return GodotMonoModLoader.Instance.Modules[moduleId];
+        return GodotMonoModLoader.Instance.LoadedModules[moduleId];
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static string GetExecutingAssemblyName()
+    internal static Assembly GetExecutingAssembly()
     {
         Assembly currentAssembly = typeof(GMML).Assembly;
 
         return new StackTrace().GetFrames().Select(frame => frame.GetMethod()?.DeclaringType?.Assembly)
-                .First(assembly => assembly != currentAssembly && GodotMonoModLoader.Instance.ModulesByAssembly.TryGetValue(currentAssembly.GetName().Name ?? "", out ModuleInfo? _))?.GetName().Name
-            ?? string.Empty;
-        
+                .FirstOrDefault(assembly =>
+                    assembly != null && assembly != currentAssembly 
+                    && GodotMonoModLoader.Instance.ModulesByAssembly.TryGetValue(assembly, out ModuleInfo? _), currentAssembly)!;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static ModuleInfo GetExecutingModule()
     {
-        return GodotMonoModLoader.Instance.ModulesByAssembly.GetValueOrDefault(GetExecutingAssemblyName()) ?? throw new Exception("Couldn't find a recognized called assembly");
+        return GodotMonoModLoader.Instance.ModulesByAssembly.GetValueOrDefault(GetExecutingAssembly()) ?? throw new Exception("Couldn't find a recognized caller assembly");
     }
     
     internal static T? ParseModConfig<T>(JToken? modConfig)
@@ -166,8 +166,9 @@ public static class GMML
         {
             return modConfig.ToObject<T>(new JsonSerializer());
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            GD.PrintErr(e);
             return (T?) T.Default();
         }
     }

@@ -2,7 +2,7 @@ using Atomcraft;
 
 namespace GodotMonoModLoader.Atomcraft;
 
-public class UniverseSaveContext : ModEntryContext
+public class UniverseSaveContext : HookContext
 {
     public SaveData_Universe Universe { get; }
     public SaveData_World World => Universe.World;

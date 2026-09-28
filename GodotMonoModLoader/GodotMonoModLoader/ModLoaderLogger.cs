@@ -5,7 +5,7 @@ namespace GodotMonoModLoader;
 public partial class ModLoaderLogger : RefCounted
 {
     public event Action<string>? LogAdded;
-    public List<string> History = [];
+    internal List<string> History = [];
     private ulong _startTime;
  
     public ModLoaderLogger()
@@ -13,7 +13,7 @@ public partial class ModLoaderLogger : RefCounted
         _startTime = Time.GetTicksMsec();
     }
 
-    public ModLoaderLogger Init(ulong startTime, List<string> history)
+    internal ModLoaderLogger Init(ulong startTime, List<string> history)
     {
         _startTime = startTime;
         History = history;

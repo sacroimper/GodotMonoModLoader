@@ -1,6 +1,6 @@
 namespace GodotMonoModLoader.Atomcraft;
 
-public interface IPostSimulationStepProvider : IModEntry
+public interface IPostSimulationStepProvider : IHook
 {
 
     /**

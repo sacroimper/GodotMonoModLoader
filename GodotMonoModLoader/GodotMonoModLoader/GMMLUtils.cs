@@ -1,26 +1,14 @@
+using Godot;
+
 namespace GodotMonoModLoader;
 
 internal static class GMMLUtils
 {
     
     internal static ModLoaderLogger Logger => GodotMonoModLoader.Instance.Logger;
-    /**
-     * This caches all the IModEntry mod entries so that it isn't needed to loop all modules each time. 
-     */
-    internal static class ModEntryCache<T> 
-        where T : class, IModEntry
-    {
-        private static T[]? _modEntries;
-        internal static T[] ModEntries =>
-            _modEntries ??= GMML.LoadedModules
-                .Where(module => module.ModEntry is T)
-                .Select(module => module.ModEntry as T)
-                .ToArray()!;
-    }
-    
     internal static void ExecuteForEachLoadedModule<T>(Action<ModuleInfo, T?> executeMethodDelegate,
         Action<ModuleInfo, Exception> onErrorDelegate)
-        where T : class, IModEntry
+        where T : class, IHook
     {
         foreach (ModuleInfo module in GMML.LoadedModules)
         {
@@ -30,28 +18,20 @@ internal static class GMMLUtils
             }
             catch (Exception e)
             {
-                onErrorDelegate(module, e);
+                try
+                {
+                    onErrorDelegate(module, e);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex);
+                    Logger.LogError("Original error:");
+                    Logger.LogError(e);
+                }
             }
         }
     }
     
-    internal static void ExecuteForEachModEntry<T>(Action<T> executeMethodDelegate,
-        Action<ModuleInfo, Exception> onErrorDelegate)
-        where T : class, IModEntry
-    {
-        foreach (T modEntry in ModEntryCache<T>.ModEntries)
-        {
-            try
-            {
-                executeMethodDelegate(modEntry);
-            }
-            catch (Exception e)
-            {
-                onErrorDelegate(modEntry.ModuleInfo, e);
-            }
-        }
-    }
-
     internal static Action<ModuleInfo, Exception> GenericOnErrorWhileLoading(string errorMessage, string errorLog) =>
         (module, e) =>
         {

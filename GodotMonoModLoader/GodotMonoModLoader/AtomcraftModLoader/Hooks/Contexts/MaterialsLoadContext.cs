@@ -2,20 +2,19 @@ using Atomcraft;
 
 namespace GodotMonoModLoader.Atomcraft;
 
-public class ReactionsLoadContext : ModEntryContext
+public class MaterialsLoadContext : HookContext
 {
     /**
      * All the materials read from the mod files. Not yet loaded into the game. More materials can be added to this list to be loaded.
      */
-    public List<ReactionType> ModReactions { get; }
-
+    public List<Serializable_MaterialType> ModMaterials { get; }
     /**
      * All the materials the game has already loaded.
      */
     public DualKeyDictionary<MaterialType> LoadedMaterials => Materials.MaterialTypesDict;
 
-    public ReactionsLoadContext(List<ReactionType> modReactions)
+    public MaterialsLoadContext(List<Serializable_MaterialType> modMaterials)
     {
-        ModReactions = modReactions;
+        ModMaterials = modMaterials;
     }
 }

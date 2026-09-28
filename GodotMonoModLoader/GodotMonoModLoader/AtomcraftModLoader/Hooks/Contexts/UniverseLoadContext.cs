@@ -4,7 +4,7 @@ using Newtonsoft.Json.Linq;
 
 namespace GodotMonoModLoader.Atomcraft;
 
-public class UniverseLoadContext : ModEntryContext
+public class UniverseLoadContext : HookContext
 {
     public SaveData_Universe Universe { get; }
     public SaveData_World World => Universe.World;

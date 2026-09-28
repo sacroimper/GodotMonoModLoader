@@ -3,7 +3,11 @@ using HarmonyLib;
 
 namespace GodotMonoModLoader.Atomcraft;
 
-public abstract class AtomcraftModEntry : GMMLModEntry
+public abstract class AtomcraftModEntry : GMMLModEntry, 
+    IOnMaterialsLoadProvider, IPostMaterialsLoadProvider, 
+    IPostCraftablesInitProvider, 
+    IOnReactionsLoadProvider, 
+    IPostSimulationInitProvider
 {
 
     /**
@@ -49,7 +53,7 @@ public abstract class AtomcraftModEntry : GMMLModEntry
      * <return>A list with all the information of the craftables to be created.</return>
      *
      */
-    public virtual List<AMLCraftable> PostCraftablesInit() => [];
+    public virtual List<AMLCraftable> PostCraftablesInit(CraftablesInitContext context) => [];
     
     /**
      * <summary>Called after the game has loaded the base reactions, but before loading the reactions added by this mod through files.<br/>
@@ -65,7 +69,7 @@ public abstract class AtomcraftModEntry : GMMLModEntry
      * Perfect to place the initialization code that requires the game to be fully loaded.</summary>
      *
      */
-    public virtual void PostSimulationInit() { }
+    public virtual void PostSimulationInit(SimulationInitContext context) { }
     
 
 }

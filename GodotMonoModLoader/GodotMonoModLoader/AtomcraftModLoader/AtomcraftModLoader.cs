@@ -72,7 +72,7 @@ public class AtomcraftModLoader
             }
             else
             {
-                Logger.LogMessage("Loading materials from: " + path);
+                Logger.LogMessage("Looking for materials in: " + path);
                 foreach (string entry in reader.GetFiles())
                 {
                     if (entry.StartsWith(path) && entry.EndsWith(".json"))
@@ -85,9 +85,9 @@ public class AtomcraftModLoader
         }
         catch (Exception e)
         {
-            module.ErrorMessage = "Error while trying to load materials from: " + module.Materials;
-            Logger.LogMessage("Error while trying to load materials from module: " + module.ModuleId);
-            Logger.LogError(e.ToString());
+            module.ErrorMessage = "Error while trying to read materials from: " + module.Materials;
+            Logger.LogMessage("Error while trying to read materials from module: " + module.ModuleId);
+            Logger.LogError(e);
             return false;
         }
         
@@ -96,7 +96,7 @@ public class AtomcraftModLoader
 
     public List<Serializable_MaterialType> LoadMaterials(ZipReader reader, string file)
     {
-        Logger.LogMessage("Loading materials file: " + file);
+        Logger.LogMessage("Reading materials file: " + file);
         
         try
         {
@@ -127,7 +127,7 @@ public class AtomcraftModLoader
             }
             else
             {
-                Logger.LogMessage("Loading reactions from: " + path);
+                Logger.LogMessage("Looking for reactions in: " + path);
                 foreach (string entry in reader.GetFiles())
                 {
                     if (entry.StartsWith(path) && entry.EndsWith(".json"))
@@ -139,9 +139,9 @@ public class AtomcraftModLoader
         }
         catch (Exception e)
         {
-            module.ErrorMessage = "Error while trying to load reactions from: " + module.Reactions;
-            Logger.LogMessage("Error while trying to load reactions from module: " + module.ModuleId);
-            Logger.LogError(e.ToString());
+            module.ErrorMessage = "Error while trying to read reactions from: " + module.Reactions;
+            Logger.LogMessage("Error while trying to read reactions from module: " + module.ModuleId);
+            Logger.LogError(e);
             return false;
         }
 
@@ -150,7 +150,7 @@ public class AtomcraftModLoader
 
     public List<ReactionType> LoadReactions(ZipReader reader, string file)
     {
-        Logger.LogMessage("Loading reactions file: " + file);
+        Logger.LogMessage("Reading reactions file: " + file);
         
         try
         {
@@ -181,7 +181,7 @@ public class AtomcraftModLoader
             }
             else
             {
-                Logger.LogMessage("Loading translations from: " + path);
+                Logger.LogMessage("Looking for translations in: " + path);
                 foreach (string entry in reader.GetFiles())
                 {
                     if (entry.StartsWith(path) && entry.EndsWith(".json"))
@@ -195,7 +195,7 @@ public class AtomcraftModLoader
         {
             module.ErrorMessage = "Error while trying to load translations from: " + module.Translations;
             Logger.LogMessage("Error while trying to load translations from module: " + module.ModuleId);
-            Logger.LogError(e.ToString());
+            Logger.LogError(e);
             return false;
         }
 
@@ -247,9 +247,18 @@ public class AtomcraftModLoader
         {
             Instance.Logger.LogMessage("Loading modded materials...");
             
-            GMMLUtils.ExecuteForEachLoadedModule<AtomcraftModEntry>((module, modEntry) =>
+            GMMLUtils.ExecuteForEachLoadedModule<IOnMaterialsLoadProvider>((module, modEntry) =>
             {
-                modEntry?.OnMaterialsLoad(new MaterialsLoadContext(module.MaterialsToAdd));
+                MaterialsLoadContext context = new(module.MaterialsToAdd);
+                modEntry?.OnMaterialsLoad(context);
+                
+                foreach (IHook extraHook in module.ModEntry?.ModHooks ?? [])
+                {
+                    if (extraHook is IOnMaterialsLoadProvider onReactionsLoadHook)
+                    {
+                        onReactionsLoadHook.OnMaterialsLoad(context);
+                    }
+                }
                 
                 foreach (Serializable_MaterialType material in module.MaterialsToAdd)
                 {
@@ -270,9 +279,18 @@ public class AtomcraftModLoader
         {
             Instance.Logger.LogMessage("Loading modded reactions...");
             
-            GMMLUtils.ExecuteForEachLoadedModule<AtomcraftModEntry>((module, modEntry) =>
+            GMMLUtils.ExecuteForEachLoadedModule<IOnReactionsLoadProvider>((module, hook) =>
             {
-                modEntry?.OnReactionsLoad(new ReactionsLoadContext(module.ReactionsToAdd));
+                ReactionsLoadContext context = new(module.ReactionsToAdd);
+                hook?.OnReactionsLoad(context);
+
+                foreach (IHook extraHook in module.ModEntry?.ModHooks ?? [])
+                {
+                    if (extraHook is IOnReactionsLoadProvider onReactionsLoadHook)
+                    {
+                        onReactionsLoadHook.OnReactionsLoad(context);
+                    }
+                }
                 
                 List<BaseMaterial> baseMaterials = [];
                 foreach (ReactionType reactionType in module.ReactionsToAdd)
@@ -310,9 +328,9 @@ public class AtomcraftModLoader
     {
         public static void Postfix()
         {
-            GMMLUtils.ExecuteForEachModEntry<AtomcraftModEntry>(modEntry =>
+            Hooks<IPostMaterialsLoadProvider>.Invoke((modEntry, hook) =>
             {
-                modEntry.PostMaterialsLoad(new MaterialsLoadContext(modEntry.ModuleInfo.MaterialsToAdd));
+                hook.PostMaterialsLoad(new MaterialsLoadContext(modEntry.ModuleInfo.MaterialsToAdd));
                 
             }, GMMLUtils.GenericOnErrorWhileLoading("Error while trying to apply modifications to materials.", 
                 "Error applying modifications to materials for module: "));
@@ -324,15 +342,15 @@ public class AtomcraftModLoader
     {
         public static void Postfix()
         {
-            GMMLUtils.ExecuteForEachModEntry<AtomcraftModEntry>(modEntry =>
+            CraftablesInitContext context = new();
+            Hooks<IPostCraftablesInitProvider>.Invoke((modEntry, hook) =>
             {
-                List<AMLCraftable> craftables = modEntry.PostCraftablesInit();
+                List<AMLCraftable> craftables = hook.PostCraftablesInit(context);
                 
                 foreach (AMLCraftable craftable in craftables ?? [])
                 {
                     Craftables.Add(craftable.MaterialTypeName, craftable.Inputs, craftable.VideoStream, craftable.LocIdDescription);
-                    Craftables.GetCategory(craftable.Category).MaterialTypeIds
-                        .Add(craftable.MaterialTypeName.ToMaterialTypeId());
+                    Craftables.GetCategory(craftable.Category).MaterialTypeIds.Add(craftable.MaterialTypeName.ToMaterialTypeId());
                 }
                 
             }, GMMLUtils.GenericOnErrorWhileLoading("Error while defining craftables.", 
@@ -347,9 +365,10 @@ public class AtomcraftModLoader
         [HarmonyPatch(nameof(Simulation.Init))]
         public static void InitPostfix()
         {
-            GMMLUtils.ExecuteForEachModEntry<AtomcraftModEntry>(modEntry =>
+            SimulationInitContext context = new();
+            Hooks<IPostSimulationInitProvider>.Invoke((modEntry, hook) =>
             {
-                modEntry.PostSimulationInit();
+                hook.PostSimulationInit(context);
                 
             }, GMMLUtils.GenericOnErrorWhileLoading("Error at PostSimulationInit.", 
                 "Error at PostSimulationInit for module: "));
@@ -360,9 +379,9 @@ public class AtomcraftModLoader
         public static void StepPostfix(SimSnapshot state)
         {
             SimulationStepContext context = new(state);
-            GMMLUtils.ExecuteForEachModEntry<IPostSimulationStepProvider>(modEntry =>
+            Hooks<IPostSimulationStepProvider>.Invoke((modEntry, hook) =>
             {
-                modEntry.PostSimulationStep(context);
+                hook.PostSimulationStep(context);
                 
             }, GMMLUtils.GenericOnError("Error at PostSimulationStep for module: "));
         }

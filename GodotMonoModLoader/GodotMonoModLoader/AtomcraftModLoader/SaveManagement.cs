@@ -77,9 +77,9 @@ public static class SaveManagement
 
             LoadModdedMaterials(universe);
 
-            GMMLUtils.ExecuteForEachModEntry<IUniverseLoadSaveProvider>(modEntry =>
+            Hooks<IUniverseLoadSaveProvider>.Invoke((modEntry, hook) =>
                 {
-                    modEntry.OnUniverseLoad(universe, _moddedUniverse?.ModsData.GetValueOrDefault(modEntry.ModuleInfo.ModuleId));
+                    hook.OnUniverseLoad(universe, _moddedUniverse?.ModsData.GetValueOrDefault(modEntry.ModuleInfo.ModuleId));
                 },
                 GMMLUtils.GenericOnError("Error during mod OnUniverseLoad for module: "));
             
@@ -103,9 +103,9 @@ public static class SaveManagement
                 
             SaveModdedMaterials(universe);
 
-            GMMLUtils.ExecuteForEachModEntry<IUniverseLoadSaveProvider>(modEntry =>
+            Hooks<IUniverseLoadSaveProvider>.Invoke((modEntry, hook) =>
                 {
-                    JToken? modData = modEntry.OnUniverseSave(universe);
+                    JToken? modData = hook.OnUniverseSave(universe);
                     if (modData != null)
                     {
                         SaveData_ModdedUniverse moddedUniverse = GetOrCreateModdedUniverse(worldName);

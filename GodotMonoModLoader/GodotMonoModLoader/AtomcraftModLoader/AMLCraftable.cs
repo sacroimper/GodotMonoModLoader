@@ -5,10 +5,17 @@ namespace GodotMonoModLoader.Atomcraft;
 
 public class AMLCraftable
 {
-    public required string MaterialTypeName;
-    public required Dictionary<string, int> Inputs;
+    public readonly CraftableCategoryIndex Category;
+    public readonly string MaterialTypeName;
+    public readonly string LocIdDescription;
+    public readonly Dictionary<string, int> Inputs;
     public VideoStream? VideoStream;
-    public required string LocIdDescription;
-    public required CraftableCategoryIndex Category;
 
+    public AMLCraftable(CraftableCategoryIndex category, string materialTypeName, string locIdDescription, Dictionary<string, int> inputs)
+    {
+        Category = category;
+        MaterialTypeName = materialTypeName;
+        LocIdDescription = locIdDescription;
+        Inputs = inputs;
+    }
 }

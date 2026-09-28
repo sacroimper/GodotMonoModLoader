@@ -1,3 +1,4 @@
+using System.Reflection;
 using Atomcraft;
 using Godot;
 using Newtonsoft.Json;
@@ -8,6 +9,8 @@ namespace GodotMonoModLoader;
 public partial class ModuleInfo : RefCounted
 {
     [JsonProperty(nameof(ModuleId))]
+    internal string OriginalId { get; set; } = null!;
+    [JsonIgnore]
     public string ModuleId { get; internal set; } = null!;
     
     [JsonProperty(nameof(Dll))]
@@ -54,11 +57,14 @@ public partial class ModuleInfo : RefCounted
     public string? ErrorMessage { get; internal set; }
     
     [JsonIgnore]
+    public Assembly? Assembly { get; internal set; }
+    
+    [JsonIgnore]
     public GMMLModEntry? ModEntry { get; internal set; }
 
     [JsonIgnore]
     public string UniqueId => Mod.Author + "." + ModuleId;
-
+    
     [JsonIgnore]
     internal readonly List<Serializable_MaterialType> MaterialsToAdd = [];
     [JsonIgnore]

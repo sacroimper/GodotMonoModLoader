@@ -21,9 +21,9 @@ public partial class GodotMonoModLoader : RefCounted
 	internal ModLoaderLogger Logger { get; private set; }
 	internal readonly AtomcraftModLoader AtomcraftModLoader;
 	internal readonly Dictionary<string, ModInfo> Mods = [];
-	internal readonly List<ModuleInfo> LoadedModules = [];
-	internal readonly Dictionary<string, ModuleInfo> Modules = [];
-	internal readonly Dictionary<string, ModuleInfo> ModulesByAssembly = [];
+	internal readonly List<string> LoadedModulesIds = [];
+	internal readonly Dictionary<string, ModuleInfo> LoadedModules = [];
+	internal readonly Dictionary<Assembly, ModuleInfo> ModulesByAssembly = [];
 	internal readonly Dictionary<string, object?> ModsConfig = [];
 	
 	public GodotMonoModLoader()
@@ -88,12 +88,11 @@ public partial class GodotMonoModLoader : RefCounted
 				throw new Exception("Could not load DLL: " + dllPath);
 			}
 
-			string assemblyName = assembly.GetName().Name
-				?? throw new Exception("Loaded assembly does not have a name.");
-			ModulesByAssembly[assemblyName] = module;
-			Modules[module.ModuleId] = module;
+			module.Assembly = assembly;
 			
 			ScriptManagerBridge.LookupScriptsInAssembly(assembly);
+			
+			ModulesByAssembly[assembly] = module;
 			
 			Logger.LogMessage($"DLL Loaded: {assembly.FullName}");
 
@@ -106,24 +105,17 @@ public partial class GodotMonoModLoader : RefCounted
 			return false;
 		}
 
-		
-		if (!string.IsNullOrEmpty(module.EntryClass))
-		{
-			return TryInitializeMod(mod, module, assembly);
-		}
-
 		return true;
 	}
 	
-	private bool TryInitializeMod(ModInfo mod, ModuleInfo module, Assembly assembly)
+	private bool TryInitializeMod(ModInfo mod, ModuleInfo module)
 	{
-		string? dllName = assembly.GetName().Name;
 		Debug.Assert(module.EntryClass != null, "module.EntryClass != null");
 		string entryClass = module.EntryClass;
 
 		try
 		{
-			Type? modEntryType = assembly.GetType(entryClass);
+			Type? modEntryType = module.Assembly!.GetType(entryClass);
 
 			if (modEntryType == null)
 			{
@@ -131,7 +123,9 @@ public partial class GodotMonoModLoader : RefCounted
 			}
 			
 			module.ModEntry = CreateModEntry(modEntryType).Init(mod, module);
-
+			
+			Hooks.Register(module.ModEntry);
+			
 			if (module.ModEntry is IModInitializationProvider modEntry)
 			{
 				FileUtils.LoadModConfig(module, out JToken? modConfig);
@@ -147,13 +141,16 @@ public partial class GodotMonoModLoader : RefCounted
 		}
 		catch (Exception e)
 		{
-			module.ErrorMessage = "Error while trying to initialize the dll: " + dllName;
-			Logger.LogMessage($"Error initializing DLL: {dllName}");
-			Logger.LogError(e.ToString());
+			module.ErrorMessage = "Error while trying to initialize the mod entry: " + module.EntryClass;
+			Logger.LogMessage($"Error initializing mod entry: {module.EntryClass}");
+			Logger.LogError(e);
+
+			module.ModEntry?.UnregisterHooks();
+			
 			return false;
 		}
 		
-		Logger.LogMessage($"DLL {dllName} initialized!");
+		Logger.LogMessage($"Mod entry {module.EntryClass} initialized!");
 		
 		return true;
 	}
@@ -179,11 +176,10 @@ public partial class GodotMonoModLoader : RefCounted
 		return modEntry;
 	}
 
-	public Godot.Collections.Dictionary<string, ModInfo> LoadMods()
+	internal Godot.Collections.Dictionary<string, ModInfo> LoadMods()
 	{
 		try
 		{
-			Mods.Clear();
 			LookupMods();
 			GetLoadableModules(true);
 			Logger.LogMessage("Modules loaded: " + LoadedModules.Count);
@@ -197,25 +193,33 @@ public partial class GodotMonoModLoader : RefCounted
 		return new Godot.Collections.Dictionary<string, ModInfo>(Mods);
 	}
  
-    public List<ModuleInfo> GetLoadableModules(bool loadNow)
+    public Dictionary<string, ModuleInfo> GetLoadableModules(bool loadNow)
     {
-        Dictionary<string, ModuleInfo> modules = [];
-        List<ModuleInfo> loadableModules = [];
+        Dictionary<string, ModuleInfo> modules = []; // Indexed by module.OriginalId
+        Dictionary<string, ModuleInfo> loadableModules = []; // Indexed by module.ModuleId
         List<string> modulesToLoad = [];
  
         List<string> modIds = [.. Mods.Keys];
         modIds.Sort(StringComparer.Ordinal);
  
+        foreach (var mod in Mods.Values)
+        {
+	        Logger.LogMessage(mod.ToString());
+	        foreach (ModuleInfo module in mod.Modules.Values)
+	        {
+		        Logger.LogMessage(mod.ToString());
+	        }
+        }
+        
         foreach (string modId in modIds)
         {
             ModInfo mod = Mods[modId];
-            foreach (string moduleId in mod.Modules.Keys)
+            foreach (ModuleInfo module in mod.Modules.Values)
             {
-                ModuleInfo module = mod.Modules[moduleId];
-                modules[moduleId] = module;
+                modules[module.OriginalId] = module;
                 if (module.State < ModuleState.Ready)
                 {
-                    modulesToLoad.Add(moduleId);
+                    modulesToLoad.Add(module.OriginalId);
                     if (module.Optional)
                     {
                         module.State = ModuleState.Optional;
@@ -257,14 +261,14 @@ public partial class GodotMonoModLoader : RefCounted
                 }
                 
                 // Check if dependencies cannot load (don't exist or have errors)
-                bool cannotLoad = false;
+                bool canLoad = true;
                 foreach (string depId in module.Dependencies)
                 {
                     if (!modules.TryGetValue(depId, out ModuleInfo? dep) || dep.State == ModuleState.Error)
                     {
-	                    if (!cannotLoad)
+	                    if (canLoad)
 	                    {
-		                    cannotLoad = true;
+		                    canLoad = false;
 		                    
 		                    module.State = ModuleState.Error;
 		                    doneSomething = true;
@@ -274,13 +278,13 @@ public partial class GodotMonoModLoader : RefCounted
 	                    }
 	                    else
 	                    {
-		                    module.ErrorMessage += ", " + moduleId;
+		                    module.ErrorMessage += ", " + depId;
 	                    }
 	                    Logger.LogMessage(" - ", depId);
                     }
                 }
 
-                if (cannotLoad)
+                if (!canLoad)
                 {
                     Logger.LogSeparator();
 
@@ -289,11 +293,11 @@ public partial class GodotMonoModLoader : RefCounted
                 
                 // Check if dependencies haven't been loaded yet
                 if (module.Dependencies.Any(depId => modules.TryGetValue(depId, out ModuleInfo? dep)
-                                                     && dep.State != ModuleState.Ready && dep.State != ModuleState.Loaded))
+                                                     && dep.State != ModuleState.Ready && dep.State != ModuleState.Loaded && dep.State != ModuleState.PartialError))
                 {
 	                
 	                // Mark optional modules that need to load
-                    if (module.Dependencies.All(depId => modules.GetValueOrDefault(depId)?.State is ModuleState.Optional or ModuleState.Ready or ModuleState.Loaded))
+                    if (module.Dependencies.All(depId => modules.GetValueOrDefault(depId)?.State is ModuleState.Optional or ModuleState.Ready or ModuleState.Loaded or ModuleState.PartialError))
                     {
 	                    module.Dependencies.DoIf(depId => modules[depId].State == ModuleState.Optional, 
 		                    depId => modules[depId].State = ModuleState.Default);
@@ -329,7 +333,8 @@ public partial class GodotMonoModLoader : RefCounted
                     if (LoadModule(module.Mod, module))
                     {
                         module.State = ModuleState.Loaded;
-                        LoadedModules.Add(module);
+                        LoadedModulesIds.Add(module.ModuleId);
+                        LoadedModules.Add(module.ModuleId, module);
                     }
                     else
                     {
@@ -339,7 +344,7 @@ public partial class GodotMonoModLoader : RefCounted
                 else
                 {
                     module.State = ModuleState.Ready;
-                    loadableModules.Add(module);
+                    loadableModules.Add(module.ModuleId, module);
                 }
                 doneSomething = true;
                 modulesToLoad.RemoveAt(i);
@@ -377,8 +382,12 @@ public partial class GodotMonoModLoader : RefCounted
 	 
 	        if (module.LoadAsResourcePack)
 	        {
-	            ProjectSettings.LoadResourcePack(mod.Path);
-	            mod.LoadedAsResourcePack = true;
+		        if (!ProjectSettings.LoadResourcePack(mod.Path))
+		        {
+			        Logger.LogError("Error loading as resource pack: " + mod.Path);
+			        return false;
+		        }
+		        mod.LoadedAsResourcePack = true;
 	        }
 	 
 	        if (!string.IsNullOrEmpty(module.Dll))
@@ -393,7 +402,15 @@ public partial class GodotMonoModLoader : RefCounted
 	        {
 		        return false;
 	        }
-
+			
+	        if (!string.IsNullOrEmpty(module.EntryClass))
+	        {
+		        if (!TryInitializeMod(mod, module))
+		        {
+			        return false;
+		        }
+	        }
+	        
 	    }
 	    catch (Exception e)
 	    {
@@ -402,6 +419,15 @@ public partial class GodotMonoModLoader : RefCounted
 		    return false;
 	    }
 	    Logger.LogMessage("Module loaded correctly: " + module.ModuleId);
+	    
+	    Hooks<IPostModModuleLoadProvider>.Invoke((modEntry, hook) =>
+	    {
+		    if (module != modEntry.ModuleInfo)
+		    {
+			    hook.PostModModuleLoad(new ModModuleLoadContext(module));
+		    }
+	    }, GMMLUtils.GenericOnErrorWhileLoading("Error during PostModModuleLoad.", "Error during PostModModuleLoad for module: "));
+	    
 	    return true;
     }
  
@@ -443,6 +469,7 @@ public partial class GodotMonoModLoader : RefCounted
 
 	    modList[mod.Id] = mod;
 
+	    
 	    mod = new ModInfo
 	    {
 		    Id = "0Harmony",
@@ -452,18 +479,19 @@ public partial class GodotMonoModLoader : RefCounted
 		    Version = AutogeneratedConstants.HARMONY_VERSION,
 		    Path = "bundled"
 	    };
+	    
+	    ModuleInfo harmonyModule = new ModuleInfo
+	    {
+		    Mod = mod,
+		    OriginalId = "0Harmony/Library",
+		    ModuleId = "0Harmony/Library",
+		    State = ModuleState.Loaded
+	    };
 
-	    mod.Modules = new Dictionary<string, ModuleInfo> {
-		    ["0Harmony/Library"] = new ModuleInfo
-		    {
-			    Mod = mod,
-			    ModuleId = "0Harmony/Library",
-			    State = ModuleState.Loaded
-		    }
-        };
+	    mod.Modules.Add(harmonyModule.OriginalId, harmonyModule);
+	    LoadedModules[harmonyModule.OriginalId] = harmonyModule;
 
-
-    modList[mod.Id] = mod;
+		modList[mod.Id] = mod;
     }
  
     public List<string> LookupZips(string path)
@@ -523,6 +551,23 @@ public partial class GodotMonoModLoader : RefCounted
         try
         {
 	        modInfo = JsonConvert.DeserializeObject<ModInfo>(jsonAsText);
+ 
+	        if (modInfo == null || string.IsNullOrEmpty(modInfo.Id))
+	        {
+	            Logger.LogMessage("Error reading mod.json: ", modPath);
+	            return false;
+	        }
+	        
+	        ModInfo mod = modInfo;
+	        foreach (ModuleInfo m in modInfo.Modules.Values)
+	        {
+		        m.Mod = mod;
+		        m.ModuleId = !m.OriginalId.StartsWith(mod.Author) && !m.OriginalId.StartsWith(mod.Id) 
+			        ? mod.Id + "/" + m.OriginalId
+			        : m.OriginalId;
+	        }
+	        modInfo.Modules = modInfo.Modules.Values.ToDictionary(module => module.ModuleId);
+	        modInfo.Path = modPath;
         }
         catch (Exception e)
         {
@@ -530,23 +575,6 @@ public partial class GodotMonoModLoader : RefCounted
             Logger.LogMessage(e.ToString());
             return false;
         }
- 
-        if (modInfo == null || string.IsNullOrEmpty(modInfo.Id))
-        {
-            Logger.LogMessage("Error reading mod.json: ", modPath);
-            return false;
-        }
-        
-        ModInfo mod = modInfo;
-        modInfo.Modules.Values.Do(m =>
-        {
-	        m.Mod = mod;
-	        if (!m.ModuleId.StartsWith(mod.Author) && !m.ModuleId.StartsWith(mod.Id))
-	        {
-		        m.ModuleId = mod.Id + "/" + m.ModuleId;
-	        }
-        });
-        modInfo.Path = modPath;
         return true;
     }
     
@@ -554,7 +582,6 @@ public partial class GodotMonoModLoader : RefCounted
     {
         jsonAsText = null;
         using ZipReader reader = new();
-        //ZipReader reader = new();
         Error err = reader.Open(modPath);
         if (err != Error.Ok)
         {

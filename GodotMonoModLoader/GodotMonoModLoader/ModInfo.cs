@@ -17,7 +17,7 @@ public partial class ModInfo : RefCounted
         {
             List<ModuleInfo>? items = serializer.Deserialize<List<ModuleInfo>>(reader);
 
-            return items?.ToDictionary(x => x.ModuleId) ?? [];
+            return items?.ToDictionary(x => x.OriginalId) ?? [];
         }
 
         public override void WriteJson(

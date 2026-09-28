@@ -2,7 +2,7 @@ using Atomcraft;
 
 namespace GodotMonoModLoader.Atomcraft;
 
-public class SimulationStepContext : ModEntryContext
+public class SimulationStepContext : HookContext
 {
     public SimSnapshot State { get; }
 
