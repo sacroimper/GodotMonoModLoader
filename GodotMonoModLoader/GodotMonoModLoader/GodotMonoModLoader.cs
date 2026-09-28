@@ -202,15 +202,6 @@ public partial class GodotMonoModLoader : RefCounted
         List<string> modIds = [.. Mods.Keys];
         modIds.Sort(StringComparer.Ordinal);
  
-        foreach (var mod in Mods.Values)
-        {
-	        Logger.LogMessage(mod.ToString());
-	        foreach (ModuleInfo module in mod.Modules.Values)
-	        {
-		        Logger.LogMessage(mod.ToString());
-	        }
-        }
-        
         foreach (string modId in modIds)
         {
             ModInfo mod = Mods[modId];
