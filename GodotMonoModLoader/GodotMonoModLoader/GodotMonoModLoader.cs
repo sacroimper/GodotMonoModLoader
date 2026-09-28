@@ -182,7 +182,7 @@ public partial class GodotMonoModLoader : RefCounted
 		{
 			LookupMods();
 			GetLoadableModules(true);
-			Logger.LogMessage("Modules loaded: " + LoadedModules.Count);
+			Logger.LogMessage("Modules loaded: " + (LoadedModules.Count - 1)); // Don't include the bundled Harmony module
 		}
 		catch (Exception e)
 		{

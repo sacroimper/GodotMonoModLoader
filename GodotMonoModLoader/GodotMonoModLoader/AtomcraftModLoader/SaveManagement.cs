@@ -57,7 +57,7 @@ public static class SaveManagement
 
     private static void LoadModdedUniverse(SaveData_Universe universe)
     {
-        GD.Print("[GodotMonoModLoader] Loading modded universe...");
+        GD.Print("[GodotMonoModLoader]: Loading modded universe...");
 
         try
         {
@@ -84,18 +84,18 @@ public static class SaveManagement
                 GMMLUtils.GenericOnError("Error during mod OnUniverseLoad for module: "));
             
             
-            GD.Print("[GodotMonoModLoader] Modded universe loaded.");
+            GD.Print("[GodotMonoModLoader]: Modded universe loaded.");
         }
         catch (Exception e)
         {
-            GD.PrintErr("[GodotMonoModLoader] Error while loading modded world: ", e.Message);
+            GD.PrintErr("[GodotMonoModLoader]: Error while loading modded world: ", e.Message);
             GD.PrintErr(e);
         }
     }
     
     private static void SaveModdedUniverse(SaveData_Universe universe)
     {
-        GD.Print("[GodotMonoModLoader] Saving modded universe...");
+        GD.Print("[GodotMonoModLoader]: Saving modded universe...");
 
         try
         {
@@ -122,11 +122,11 @@ public static class SaveManagement
                 FileUtils.SaveFile(moddedSavePath, JsonConvert.SerializeObject(_moddedUniverse, Formatting.None));
             }
             
-            GD.Print("[GodotMonoModLoader] Modded universe saved.");
+            GD.Print("[GodotMonoModLoader]: Modded universe saved.");
         }
         catch (Exception e)
         {
-            GD.PrintErr("[GodotMonoModLoader] Error while saving modded world: ", e.Message);
+            GD.PrintErr("[GodotMonoModLoader]: Error while saving modded world: ", e.Message);
             GD.PrintErr(e);
         }
     }

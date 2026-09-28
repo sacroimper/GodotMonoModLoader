@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Godot;
@@ -130,9 +131,19 @@ public static class GMML
         return GodotMonoModLoader.Instance.Mods[modId];
     }
     
+    public static bool TryGetModInfo(this string moduleId, out ModInfo? mod)
+    {
+        return GodotMonoModLoader.Instance.Mods.TryGetValue(moduleId, out mod);
+    }
+    
     public static ModuleInfo ToModuleInfo(this string moduleId)
     {
         return GodotMonoModLoader.Instance.LoadedModules[moduleId];
+    }
+    
+    public static bool TryGetModuleInfo(this string moduleId, out ModuleInfo? module)
+    {
+        return GodotMonoModLoader.Instance.LoadedModules.TryGetValue(moduleId, out module);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
