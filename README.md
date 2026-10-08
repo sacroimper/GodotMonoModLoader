@@ -95,11 +95,15 @@ To make a mod that loads with this Mod Loader:
 
   - **If the type implements AtomcraftModEntry:** An instance will be created after loading the library. Additionally:
     - This type can implement `IModInitializationProvider` to be called after loading the library. A custom serializable type can be defined with the interface to be used as the Mod Config (Ex: `IModInitializationProvider<MyModConfig>`).
+    - This type can implement `IPostModModuleLoadProvider` to be called after every mod is loaded (will only activate for mods loaded after the current one).
     - This type can implement `IUniverseLoadSaveProvider` to be called after loading and before saving a save. A custom serializable type can be defined with the interface to be used as the save data (Ex: `IUniverseLoadSaveProvider<MySaveData>`).
     - This type can override `OnMaterialsLoad` to dynamically create materials.
     - This type can override `PostMaterialsLoad` to apply "after-load" modifications to materials, like assign custom material classes (using `Materials.AddBaseMaterial()`).
     - This type can override `PostCraftablesInit` to define craftable materials.
     - This type can override `OnReactionsLoad` to dynamically create reactions.
+    - This type can override `PostSimulationInit` to initialize any components that requires the simulation to be ready.
+    - This type can implement `IPostSimulationStepProvider` to be called after every `Simulation.Step`.
+    
 
 ## Running mods on the extracted game when launching from Godot
 
